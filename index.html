@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Offroad 3D Game</title>
+    <title>Offroad 3D Game - Enemy Attack & Checkpoints</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; touch-action: manipulation; }
         body { overflow: hidden; background: #000; font-family: 'Segoe UI', Arial, sans-serif; user-select: none; -webkit-user-select: none; }
         canvas { display: block; }
 
-        #start-screen {
+        #start-screen, #win-screen {
             position: fixed;
             inset: 0;
             background: linear-gradient(135deg, #1a2a1a, #0d1f0d);
@@ -22,20 +22,30 @@
             text-align: center;
         }
 
-        #start-screen h1 {
+        #win-screen {
+            display: none;
+            background: linear-gradient(135deg, rgba(20,50,20,0.95), rgba(10,30,10,0.98));
+        }
+
+        #start-screen h1, #win-screen h1 {
             font-size: 3.5rem;
             margin-bottom: 10px;
             text-shadow: 0 0 20px #4caf50;
             color: #8bc34a;
         }
 
-        #start-screen p {
-            font-size: 1.2rem;
-            opacity: 0.8;
-            margin-bottom: 40px;
+        #win-screen h1 {
+            color: #ffd700;
+            text-shadow: 0 0 25px #ffd700;
         }
 
-        #play-btn {
+        #start-screen p, #win-screen p {
+            font-size: 1.2rem;
+            opacity: 0.8;
+            margin-bottom: 30px;
+        }
+
+        .game-btn {
             padding: 18px 55px;
             font-size: 1.5rem;
             background: #4caf50;
@@ -47,7 +57,7 @@
             box-shadow: 0 0 25px rgba(76, 175, 80, 0.5);
         }
 
-        #play-btn:hover {
+        .game-btn:hover {
             background: #66bb6a;
             transform: scale(1.08);
         }
@@ -57,13 +67,31 @@
             top: 20px;
             left: 20px;
             color: white;
-            background: rgba(0,0,0,0.55);
+            background: rgba(0,0,0,0.65);
             padding: 15px 20px;
             border-radius: 12px;
             font-size: 14px;
             line-height: 1.6;
             z-index: 10;
             display: none;
+            backdrop-filter: blur(5px);
+        }
+
+        #checkpoint-tracker {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #ffd700;
+            font-size: 22px;
+            font-weight: bold;
+            background: rgba(0,0,0,0.7);
+            padding: 10px 25px;
+            border-radius: 30px;
+            border: 2px solid #ffd700;
+            z-index: 10;
+            display: none;
+            text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
         }
 
         #speedometer {
@@ -73,11 +101,37 @@
             color: white;
             font-size: 24px;
             font-weight: bold;
-            background: rgba(0,0,0,0.55);
+            background: rgba(0,0,0,0.65);
             padding: 10px 20px;
             border-radius: 12px;
             z-index: 10;
             display: none;
+        }
+
+        #shield-status {
+            position: fixed;
+            bottom: 100px;
+            left: 20px;
+            color: #00d2ff;
+            font-size: 18px;
+            font-weight: bold;
+            background: rgba(0,210,255,0.2);
+            border: 1px solid #00d2ff;
+            padding: 8px 16px;
+            border-radius: 20px;
+            z-index: 10;
+            display: none;
+            text-shadow: 0 0 8px #00d2ff;
+        }
+
+        #hit-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(255, 0, 0, 0.3);
+            pointer-events: none;
+            z-index: 90;
+            opacity: 0;
+            transition: opacity 0.2s ease;
         }
 
         #loading {
@@ -139,15 +193,25 @@
 
         .brake-btn { background: rgba(244, 67, 54, 0.4); border-color: rgba(244, 67, 54, 0.7); }
         .brake-btn:active { background: rgba(244, 67, 54, 0.8); }
+
+        .shield-btn { background: rgba(0, 210, 255, 0.4); border-color: rgba(0, 210, 255, 0.7); font-size: 14px; font-weight: bold; }
+        .shield-btn:active { background: rgba(0, 210, 255, 0.8); }
     </style>
 </head>
 <body>
     <div id="loading">Loading 3D World...</div>
+    <div id="hit-overlay"></div>
 
     <div id="start-screen">
         <h1>OFFROAD 3D</h1>
-        <p>Drive through the wilderness</p>
-        <button id="play-btn">Click to Start</button>
+        <p>Drive through wilderness, reach checkpoints, and defend against attackers!</p>
+        <button id="play-btn" class="game-btn">Click to Start</button>
+    </div>
+
+    <div id="win-screen">
+        <h1>VICTORY!</h1>
+        <p>You reached all checkpoints and survived the enemy attacks!</p>
+        <button id="restart-btn" class="game-btn">Play Again</button>
     </div>
 
     <div id="ui">
@@ -155,10 +219,13 @@
         W / ↑ : Accelerate<br>
         S / ↓ : Brake / Reverse<br>
         A / ← : Steer Left<br>
-        D / → : Steer Right
+        D / → : Steer Right<br>
+        <b style="color: #00d2ff;">SPACE : Activate Shield</b>
     </div>
 
+    <div id="checkpoint-tracker">Checkpoint 1 / 3</div>
     <div id="speedometer">0 km/h</div>
+    <div id="shield-status">🛡️ SHIELD ACTIVE</div>
 
     <!-- On-screen Mobile Controls -->
     <div id="mobile-controls">
@@ -167,6 +234,7 @@
             <button id="btn-right" class="touch-btn">▶</button>
         </div>
         <div class="control-group">
+            <button id="btn-shield" class="touch-btn shield-btn">🛡️</button>
             <button id="btn-brake" class="touch-btn brake-btn">▼</button>
             <button id="btn-accel" class="touch-btn accel-btn">▲</button>
         </div>
@@ -287,52 +355,11 @@
             return tree;
         }
 
-        function createOakTree(scale = 1) {
-            const tree = new THREE.Group();
-            const trunk = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.28*scale, 0.45*scale, 2.8*scale, 7),
-                new THREE.MeshStandardMaterial({ color: 0x3d2914, roughness: 0.9 })
-            );
-            trunk.position.y = 1.4 * scale;
-            trunk.castShadow = true;
-            tree.add(trunk);
-
-            const leafMat = new THREE.MeshStandardMaterial({ color: 0x2d5a27, roughness: 0.85 });
-            const positions = [
-                [0, 3.9*scale, 0, 2.3*scale],
-                [-1.2*scale, 3.4*scale, 0.7*scale, 1.5*scale],
-                [1.3*scale, 3.5*scale, -0.5*scale, 1.6*scale],
-                [0.2*scale, 4.8*scale, 0.3*scale, 1.4*scale]
-            ];
-            positions.forEach(p => {
-                const s = new THREE.Mesh(new THREE.SphereGeometry(p[3], 7, 6), leafMat);
-                s.position.set(p[0], p[1], p[2]);
-                s.castShadow = true;
-                tree.add(s);
-            });
-            return tree;
-        }
-
-        function createDeadTree(scale = 1) {
-            const tree = new THREE.Group();
-            const mat = new THREE.MeshStandardMaterial({ color: 0x5c4033, roughness: 1 });
-            const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.18*scale, 0.32*scale, 4.2*scale, 6), mat);
-            trunk.position.y = 2.1 * scale;
-            trunk.castShadow = true;
-            tree.add(trunk);
-            return tree;
-        }
-
-        for (let i = 0; i < 70; i++) {
-            let tree;
-            const r = Math.random();
-            if (r < 0.6) tree = createPineTree(0.75 + Math.random()*0.6);
-            else if (r < 0.88) tree = createOakTree(0.7 + Math.random()*0.5);
-            else tree = createDeadTree(0.8 + Math.random()*0.4);
-
-            const x = (Math.random() - 0.5) * 190;
-            const z = (Math.random() - 0.5) * 190;
-            if (Math.abs(x) < 15 && Math.abs(z) < 15) continue;
+        for (let i = 0; i < 60; i++) {
+            const tree = createPineTree(0.75 + Math.random()*0.6);
+            const x = (Math.random() - 0.5) * 180;
+            const z = (Math.random() - 0.5) * 180;
+            if (Math.abs(x) < 20 && Math.abs(z) < 20) continue;
 
             const groundY = getTerrainHeight(x, z);
             tree.position.set(x, groundY, z);
@@ -340,12 +367,13 @@
             scene.add(tree);
         }
 
-        // ====================== CAR ======================
+        // ====================== CAR CREATION ======================
         let car = null;
+        let shieldMesh = null;
 
-        function createDefaultCar() {
+        function createCarMesh(bodyColor = 0xc0392b) {
             const group = new THREE.Group();
-            const bodyMat = new THREE.MeshStandardMaterial({ color: 0xc0392b, roughness: 0.4 });
+            const bodyMat = new THREE.MeshStandardMaterial({ color: bodyColor, roughness: 0.4 });
             const body = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.55, 4.0), bodyMat);
             body.position.y = 0.55;
             body.castShadow = true;
@@ -353,13 +381,13 @@
 
             const cabin = new THREE.Mesh(
                 new THREE.BoxGeometry(1.7, 0.5, 1.9),
-                new THREE.MeshStandardMaterial({ color: 0x222, roughness: 0.3 })
+                new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.3 })
             );
             cabin.position.set(0, 1.05, -0.25);
             cabin.castShadow = true;
             group.add(cabin);
 
-            const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111, roughness: 0.7 });
+            const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.7 });
             [[-1.05,0.38,1.35],[1.05,0.38,1.35],[-1.05,0.38,-1.35],[1.05,0.38,-1.35]].forEach(p => {
                 const w = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 0.32, 14), wheelMat);
                 w.rotation.z = Math.PI/2;
@@ -370,66 +398,197 @@
             return group;
         }
 
-        car = createDefaultCar();
+        car = createCarMesh(0x27ae60); // Green Player Car
         car.position.set(0, getTerrainHeight(0, 0), 0);
         scene.add(car);
 
-        // ====================== AUTO-FIX GLB CAR LOADER ======================
-const loader = new GLTFLoader();
-loader.load('car.glb', (gltf) => {
-    // Purani red car ko hatao
-    scene.remove(car);
+        // Protection Shield Mesh attached to car
+        const shieldGeo = new THREE.SphereGeometry(2.8, 24, 24);
+        const shieldMat = new THREE.MeshBasicMaterial({
+            color: 0x00d2ff,
+            transparent: true,
+            opacity: 0.4,
+            wireframe: true
+        });
+        shieldMesh = new THREE.Mesh(shieldGeo, shieldMat);
+        shieldMesh.position.y = 1.0;
+        shieldMesh.visible = false;
+        car.add(shieldMesh);
 
-    const loadedModel = gltf.scene;
+        // GLTF Car Loader for Player Car
+        const loader = new GLTFLoader();
+        loader.load('car.glb', (gltf) => {
+            scene.remove(car);
+            const loadedModel = gltf.scene;
 
-    // 1. Shadows Enable Karein
-    loadedModel.traverse(c => {
-        if (c.isMesh) {
-            c.castShadow = true;
-            c.receiveShadow = true;
+            loadedModel.traverse(c => {
+                if (c.isMesh) {
+                    c.castShadow = true;
+                    c.receiveShadow = true;
+                }
+            });
+
+            const box = new THREE.Box3().setFromObject(loadedModel);
+            const size = box.getSize(new THREE.Vector3());
+            const center = box.getCenter(new THREE.Vector3());
+
+            loadedModel.position.x -= center.x;
+            loadedModel.position.y -= box.min.y;
+            loadedModel.position.z -= center.z;
+
+            const carWrapper = new THREE.Group();
+            carWrapper.add(loadedModel);
+
+            const maxDimension = Math.max(size.x, size.y, size.z);
+            if (maxDimension > 0) {
+                const scaleFactor = 4.0 / maxDimension;
+                carWrapper.scale.set(scaleFactor, scaleFactor, scaleFactor);
+            }
+
+            car = carWrapper;
+            car.position.set(0, getTerrainHeight(0, 0), 0);
+            car.add(shieldMesh);
+            scene.add(car);
+        }, undefined, () => {});
+
+        // ====================== ENEMY CAR (OPPONENT) ======================
+        const enemyCar = createCarMesh(0xd32f2f); // Red Enemy Car
+        enemyCar.position.set(-40, getTerrainHeight(-40, -40), -40);
+        scene.add(enemyCar);
+
+        let enemySpeed = 0.28;
+
+        function updateEnemy(dt) {
+            if (!car || !enemyCar || !isPlaying) return;
+
+            // Enemy tracks and moves towards Player
+            const targetPos = car.position.clone();
+            const currentPos = enemyCar.position.clone();
+            
+            const direction = new THREE.Vector3().subVectors(targetPos, currentPos);
+            direction.y = 0;
+            direction.normalize();
+
+            const angle = Math.atan2(direction.x, direction.z);
+            enemyCar.rotation.y = THREE.MathUtils.lerp(enemyCar.rotation.y, angle + Math.PI, 0.05);
+
+            const moveDir = new THREE.Vector3(0, 0, -1).applyQuaternion(enemyCar.quaternion);
+            enemyCar.position.addScaledVector(moveDir, enemySpeed * (dt * 60));
+            enemyCar.position.y = getTerrainHeight(enemyCar.position.x, enemyCar.position.z);
+
+            // Check collision with Player
+            const dist = enemyCar.position.distanceTo(car.position);
+            if (dist < 3.2) {
+                if (isShieldActive) {
+                    // Shield Blocks Attack
+                    const pushBack = enemyCar.position.clone().sub(car.position).normalize().multiplyScalar(4);
+                    enemyCar.position.add(pushBack);
+                } else {
+                    // Player Hit Damage Response
+                    speed *= 0.2; // Slow down player
+                    triggerHitFeedback();
+                    const pushBack = car.position.clone().sub(enemyCar.position).normalize().multiplyScalar(2);
+                    car.position.add(pushBack);
+                }
+            }
         }
-    });
 
-    // 2. Model ka Size aur Bounding Box Calculate Karein
-    const box = new THREE.Box3().setFromObject(loadedModel);
-    const size = box.getSize(new THREE.Vector3());
-    const center = box.getCenter(new THREE.Vector3());
+        // Hit visual effect
+        const hitOverlay = document.getElementById('hit-overlay');
+        function triggerHitFeedback() {
+            hitOverlay.style.opacity = '1';
+            setTimeout(() => { hitOverlay.style.opacity = '0'; }, 300);
+        }
 
-    // 3. Car ko Wrapper me daal kar Pivot Fix karein (Wheels zameen par laane ke liye)
-    loadedModel.position.x -= center.x;
-    loadedModel.position.y -= box.min.y; // Wheels Y=0 par aayenge
-    loadedModel.position.z -= center.z;
+        // ====================== CHECKPOINTS SYSTEM ======================
+        const checkpointLocations = [
+            { x: 50, z: -50 },
+            { x: -60, z: 60 },
+            { x: 70, z: 70 }
+        ];
 
-    const carWrapper = new THREE.Group();
-    carWrapper.add(loadedModel);
+        let currentCheckpointIdx = 0;
+        let checkpointMesh = null;
 
-    // 4. AUTO-SCALE: Car ka size automatically 4 units (normal car) jitna kar do
-    const maxDimension = Math.max(size.x, size.y, size.z);
-    if (maxDimension > 0) {
-        const targetSize = 11.0; // Ideal length of car
-        const scaleFactor = targetSize / maxDimension;
-        carWrapper.scale.set(scaleFactor, scaleFactor, scaleFactor);
-    }
+        function buildCheckpointMesh(x, z) {
+            if (checkpointMesh) scene.remove(checkpointMesh);
 
-    // 5. Car ko global variable me assign karein aur Terrain par rakhein
-    car = carWrapper;
-    const groundY = getTerrainHeight(0, 0);
-    car.position.set(0, groundY + 1.0, 0);
+            const group = new THREE.Group();
+            const ringGeo = new THREE.TorusGeometry(4.5, 0.4, 16, 32);
+            const ringMat = new THREE.MeshStandardMaterial({ 
+                color: 0xffd700, 
+                emissive: 0xffa500, 
+                emissiveIntensity: 0.8,
+                metalness: 0.8 
+            });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.position.y = 4.5;
+            group.add(ring);
 
-    scene.add(car);
-    console.log("✅ Custom car successfully loaded and auto-fitted!");
+            // Light beam
+            const beamGeo = new THREE.CylinderGeometry(4, 4, 25, 16, 1, true);
+            const beamMat = new THREE.MeshBasicMaterial({ color: 0xffd700, transparent: true, opacity: 0.2, side: THREE.DoubleSide });
+            const beam = new THREE.Mesh(beamGeo, beamMat);
+            beam.position.y = 12.5;
+            group.add(beam);
 
-}, undefined, (error) => {
-    console.error("❌ Car load nahi hui. Error check karein:", error);
-    // Error aane par Default Red Car hi rahegi
-});
+            const groundY = getTerrainHeight(x, z);
+            group.position.set(x, groundY, z);
 
-        // ====================== CONTROLS & PHYSICS ======================
+            checkpointMesh = group;
+            scene.add(checkpointMesh);
+        }
+
+        function checkCheckpointCollision() {
+            if (!car || currentCheckpointIdx >= checkpointLocations.length) return;
+
+            const target = checkpointLocations[currentCheckpointIdx];
+            const dx = car.position.x - target.x;
+            const dz = car.position.z - target.z;
+            const dist = Math.sqrt(dx*dx + dz*dz);
+
+            if (dist < 6.0) {
+                currentCheckpointIdx++;
+                if (currentCheckpointIdx < checkpointLocations.length) {
+                    buildCheckpointMesh(checkpointLocations[currentCheckpointIdx].x, checkpointLocations[currentCheckpointIdx].z);
+                    updateCheckpointUI();
+                } else {
+                    // All Checkpoints Cleared - WIN GAME
+                    triggerWinGame();
+                }
+            }
+        }
+
+        function updateCheckpointUI() {
+            document.getElementById('checkpoint-tracker').textContent = 
+                `Checkpoint ${currentCheckpointIdx + 1} / ${checkpointLocations.length}`;
+        }
+
+        // ====================== CONTROLS & SHIELD ======================
         const keys = {};
+        let isShieldActive = false;
 
-        // Keyboard listeners
-        window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
-        window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+        window.addEventListener('keydown', e => {
+            keys[e.key.toLowerCase()] = true;
+            if (e.code === 'Space') {
+                isShieldActive = true;
+                updateShieldUI();
+            }
+        });
+
+        window.addEventListener('keyup', e => {
+            keys[e.key.toLowerCase()] = false;
+            if (e.code === 'Space') {
+                isShieldActive = false;
+                updateShieldUI();
+            }
+        });
+
+        function updateShieldUI() {
+            if (shieldMesh) shieldMesh.visible = isShieldActive;
+            const statusElem = document.getElementById('shield-status');
+            statusElem.style.display = isShieldActive ? 'block' : 'none';
+        }
 
         // Touch Control Listeners
         function bindTouchControl(elementId, keyName) {
@@ -438,12 +597,22 @@ loader.load('car.glb', (gltf) => {
 
             const handleStart = (e) => {
                 e.preventDefault();
-                keys[keyName] = true;
+                if (keyName === 'space') {
+                    isShieldActive = true;
+                    updateShieldUI();
+                } else {
+                    keys[keyName] = true;
+                }
             };
 
             const handleEnd = (e) => {
                 e.preventDefault();
-                keys[keyName] = false;
+                if (keyName === 'space') {
+                    isShieldActive = false;
+                    updateShieldUI();
+                } else {
+                    keys[keyName] = false;
+                }
             };
 
             btn.addEventListener('touchstart', handleStart, { passive: false });
@@ -457,6 +626,7 @@ loader.load('car.glb', (gltf) => {
         bindTouchControl('btn-right', 'd');
         bindTouchControl('btn-accel', 'w');
         bindTouchControl('btn-brake', 's');
+        bindTouchControl('btn-shield', 'space');
 
         let speed = 0;
         let steering = 0;
@@ -488,6 +658,9 @@ loader.load('car.glb', (gltf) => {
 
             const kmh = Math.abs(speed * 120).toFixed(0);
             document.getElementById('speedometer').textContent = kmh + " km/h";
+
+            // Rotate Checkpoint ring animation
+            if (checkpointMesh) checkpointMesh.children[0].rotation.z += 0.02;
         }
 
         // Camera follow
@@ -499,33 +672,64 @@ loader.load('car.glb', (gltf) => {
             camera.lookAt(car.position.x, car.position.y + 1.2, car.position.z);
         }
 
-        // ====================== GAME LOOP ======================
+        // ====================== GAME LOOP & STATE ======================
         let isPlaying = false;
         let lastTime = 0;
 
         function animate(time) {
-            requestAnimationFrame(animate);
             if (!isPlaying) return;
+            requestAnimationFrame(animate);
 
             const dt = (time - lastTime) / 1000 || 0.016;
             lastTime = time;
 
             updateCar(dt);
+            updateEnemy(dt);
+            checkCheckpointCollision();
             updateCamera();
             renderer.render(scene, camera);
         }
 
-        // ====================== START BUTTON ======================
-        document.getElementById('loading').style.display = 'none';
+        function triggerWinGame() {
+            isPlaying = false;
+            document.getElementById('win-screen').style.display = 'flex';
+            document.getElementById('ui').style.display = 'none';
+            document.getElementById('speedometer').style.display = 'none';
+            document.getElementById('checkpoint-tracker').style.display = 'none';
+            document.getElementById('mobile-controls').style.display = 'none';
+        }
 
-        document.getElementById('play-btn').addEventListener('click', () => {
+        function resetGame() {
+            currentCheckpointIdx = 0;
+            speed = 0;
+            car.position.set(0, getTerrainHeight(0, 0), 0);
+            car.rotation.set(0, 0, 0);
+            enemyCar.position.set(-40, getTerrainHeight(-40, -40), -40);
+
+            buildCheckpointMesh(checkpointLocations[0].x, checkpointLocations[0].z);
+            updateCheckpointUI();
+
+            document.getElementById('win-screen').style.display = 'none';
             document.getElementById('start-screen').style.display = 'none';
             document.getElementById('ui').style.display = 'block';
             document.getElementById('speedometer').style.display = 'block';
+            document.getElementById('checkpoint-tracker').style.display = 'block';
             document.getElementById('mobile-controls').style.display = 'flex';
+
             isPlaying = true;
             lastTime = performance.now();
-            animate(lastTime);
+            requestAnimationFrame(animate);
+        }
+
+        // ====================== EVENT LISTENERS ======================
+        document.getElementById('loading').style.display = 'none';
+
+        document.getElementById('play-btn').addEventListener('click', () => {
+            resetGame();
+        });
+
+        document.getElementById('restart-btn').addEventListener('click', () => {
+            resetGame();
         });
 
         // Resize
