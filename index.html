@@ -1,810 +1,1237 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Offroad 3D - Enemy Attack & Checkpoints</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; touch-action: manipulation; }
-        body { overflow: hidden; background: #000; font-family: 'Segoe UI', Arial, sans-serif; user-select: none; -webkit-user-select: none; }
-        canvas { display: block; }
-
-        /* Overlay Screens */
-        .overlay-screen {
-            position: fixed;
-            inset: 0;
-            background: linear-gradient(135deg, rgba(15, 25, 15, 0.95), rgba(5, 15, 5, 0.98));
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 100;
-            color: white;
-            text-align: center;
-            padding: 20px;
-        }
-
-        #game-over-screen {
-            display: none;
-            background: linear-gradient(135deg, rgba(50, 5, 5, 0.96), rgba(20, 0, 0, 0.98));
-        }
-
-        #win-screen {
-            display: none;
-            background: linear-gradient(135deg, rgba(10, 30, 40, 0.95), rgba(5, 15, 25, 0.98));
-        }
-
-        .overlay-screen h1 {
-            font-size: 3.2rem;
-            margin-bottom: 10px;
-            text-shadow: 0 0 20px #ff3333;
-            color: #ff4d4d;
-            letter-spacing: 2px;
-        }
-
-        #start-screen h1 {
-            color: #ff3333;
-            text-shadow: 0 0 25px rgba(255, 51, 51, 0.8);
-        }
-
-        #win-screen h1 {
-            color: #ffd700;
-            text-shadow: 0 0 25px #ffd700;
-        }
-
-        .overlay-screen p {
-            font-size: 1.2rem;
-            opacity: 0.9;
-            margin-bottom: 30px;
-            max-width: 520px;
-            line-height: 1.5;
-        }
-
-        .game-btn {
-            padding: 16px 50px;
-            font-size: 1.4rem;
-            font-weight: bold;
-            background: #ff3333;
-            border: none;
-            border-radius: 50px;
-            color: white;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 0 25px rgba(255, 51, 51, 0.6);
-        }
-
-        .game-btn:hover {
-            background: #ff5555;
-            transform: scale(1.08);
-            box-shadow: 0 0 35px rgba(255, 51, 51, 0.9);
-        }
-
-        .btn-restart {
-            background: #e53935;
-            box-shadow: 0 0 25px rgba(229, 57, 53, 0.6);
-        }
-
-        .btn-win {
-            background: #ffb300;
-            color: #111;
-            box-shadow: 0 0 25px rgba(255, 179, 0, 0.6);
-        }
-
-        /* Heads Up Display (HUD) */
-        #ui {
-            position: fixed;
-            top: 20px;
-            left: 20px;
-            color: white;
-            background: rgba(0, 0, 0, 0.75);
-            padding: 15px 20px;
-            border-radius: 12px;
-            font-size: 14px;
-            line-height: 1.6;
-            z-index: 10;
-            display: none;
-            backdrop-filter: blur(6px);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-        }
-
-        #checkpoint-tracker {
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            color: #ffd700;
-            font-size: 22px;
-            font-weight: bold;
-            background: rgba(0, 0, 0, 0.8);
-            padding: 10px 28px;
-            border-radius: 30px;
-            border: 2px solid #ffd700;
-            z-index: 10;
-            display: none;
-            text-shadow: 0 0 10px rgba(255, 215, 0, 0.6);
-            backdrop-filter: blur(6px);
-        }
-
-        #enemy-warning {
-            position: fixed;
-            top: 75px;
-            left: 50%;
-            transform: translateX(-50%);
-            color: #ff3333;
-            font-size: 16px;
-            font-weight: bold;
-            background: rgba(255, 0, 0, 0.2);
-            padding: 6px 20px;
-            border-radius: 20px;
-            border: 1px solid #ff3333;
-            z-index: 10;
-            display: none;
-            animation: warningPulse 0.8s infinite alternate;
-        }
-
-        @keyframes warningPulse {
-            0% { opacity: 0.6; transform: translateX(-50%) scale(0.98); }
-            100% { opacity: 1; transform: translateX(-50%) scale(1.03); }
-        }
-
-        #speedometer {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            color: white;
-            font-size: 22px;
-            font-weight: bold;
-            background: rgba(0, 0, 0, 0.75);
-            padding: 10px 20px;
-            border-radius: 12px;
-            z-index: 10;
-            display: none;
-            backdrop-filter: blur(6px);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-        }
-
-        #shield-status {
-            position: fixed;
-            bottom: 110px;
-            left: 20px;
-            color: #00d2ff;
-            font-size: 18px;
-            font-weight: bold;
-            background: rgba(0, 210, 255, 0.2);
-            border: 2px solid #00d2ff;
-            padding: 10px 20px;
-            border-radius: 25px;
-            z-index: 10;
-            display: none;
-            text-shadow: 0 0 10px #00d2ff;
-            box-shadow: 0 0 15px rgba(0, 210, 255, 0.4);
-            animation: pulse 0.6s infinite alternate;
-        }
-
-        @keyframes pulse {
-            0% { transform: scale(1); }
-            100% { transform: scale(1.06); }
-        }
-
-        #hit-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(255, 0, 0, 0.6);
-            pointer-events: none;
-            z-index: 90;
-            opacity: 0;
-            transition: opacity 0.15s ease;
-        }
-
-        #loading {
-            position: fixed;
-            inset: 0;
-            background: #111;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            color: white;
-            font-size: 1.5rem;
-            z-index: 200;
-        }
-
-        /* Mobile Controls UI */
-        #mobile-controls {
-            position: fixed;
-            bottom: 25px;
-            left: 0;
-            right: 0;
-            padding: 0 25px;
-            display: none;
-            justify-content: space-between;
-            align-items: center;
-            z-index: 50;
-            pointer-events: none;
-        }
-
-        .control-group {
-            display: flex;
-            gap: 15px;
-            pointer-events: auto;
-        }
-
-        .touch-btn {
-            width: 65px;
-            height: 65px;
-            border-radius: 50%;
-            background: rgba(255, 255, 255, 0.25);
-            border: 2px solid rgba(255, 255, 255, 0.5);
-            color: white;
-            font-size: 24px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            backdrop-filter: blur(4px);
-            outline: none;
-            cursor: pointer;
-            -webkit-tap-highlight-color: transparent;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.4);
-        }
-
-        .touch-btn:active {
-            background: rgba(255, 255, 255, 0.6);
-            transform: scale(0.92);
-        }
-
-        .accel-btn { background: rgba(76, 175, 80, 0.45); border-color: rgba(76, 175, 80, 0.8); }
-        .accel-btn:active { background: rgba(76, 175, 80, 0.85); }
-
-        .brake-btn { background: rgba(244, 67, 54, 0.45); border-color: rgba(244, 67, 54, 0.8); }
-        .brake-btn:active { background: rgba(244, 67, 54, 0.85); }
-
-        .shield-btn { background: rgba(0, 210, 255, 0.45); border-color: rgba(0, 210, 255, 0.8); font-size: 16px; font-weight: bold; }
-        .shield-btn:active { background: rgba(0, 210, 255, 0.85); }
-    </style>
-</head>
-<body>
-    <div id="loading">Loading 3D World...</div>
-    <div id="hit-overlay"></div>
-
-    <!-- Start Screen -->
-    <div id="start-screen" class="overlay-screen">
-        <h1>🚨 ENEMY ATTACK 🚨</h1>
-        <p>A squad of red enemy killer cars is surrounding and chasing you! Touch = Instant <b>GAME OVER</b>! Press <b>SPACE</b> or <b>🛡️</b> to activate your Shield!</p>
-        <button id="play-btn" class="game-btn">START GAME</button>
-    </div>
-
-    <!-- Game Over Screen -->
-    <div id="game-over-screen" class="overlay-screen">
-        <h1>💥 GAME OVER 💥</h1>
-        <p>An enemy car hit you! Activate your SHIELD (Spacebar / 🛡️ Button) to survive enemy attacks!</p>
-        <button id="restart-btn" class="game-btn btn-restart">TRY AGAIN</button>
-    </div>
-
-    <!-- Victory Screen -->
-    <div id="win-screen" class="overlay-screen">
-        <h1>🏆 VICTORY! 🏆</h1>
-        <p>You reached all 9 checkpoints and survived the heavy enemy car attack!</p>
-        <button id="win-restart-btn" class="game-btn btn-win">PLAY AGAIN</button>
-    </div>
-
-    <!-- HUD Controls Display -->
-    <div id="ui">
-        <b>Controls</b><br>
-        W / ↑ : Accelerate<br>
-        S / ↓ : Reverse / Brake<br>
-        A / ← : Steer Left<br>
-        D / → : Steer Right<br>
-        <b style="color: #00d2ff;">SPACE : Activate Shield 🛡️</b>
-    </div>
-
-    <div id="checkpoint-tracker">Checkpoint 1 / 9</div>
-    <div id="enemy-warning">⚠️ ENEMY CARS ATTACKING!</div>
-    <div id="speedometer">0 km/h</div>
-    <div id="shield-status">🛡️ SHIELD ACTIVE</div>
-
-    <!-- Mobile Touch Controls -->
-    <div id="mobile-controls">
-        <div class="control-group">
-            <button id="btn-left" class="touch-btn">◀</button>
-            <button id="btn-right" class="touch-btn">▶</button>
-        </div>
-        <div class="control-group">
-            <button id="btn-shield" class="touch-btn shield-btn">🛡️</button>
-            <button id="btn-brake" class="touch-btn brake-btn">▼</button>
-            <button id="btn-accel" class="touch-btn accel-btn">▲</button>
-        </div>
-    </div>
-
-    <script type="importmap">
-    {
-        "imports": {
-            "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
-        }
-    }
-    </script>
-
-    <script type="module">
-        import * as THREE from 'three';
-
-        // Scene, Sky and Fog setup
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x87CEEB);
-        scene.fog = new THREE.Fog(0x87CEEB, 100, 300);
-
-        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 600);
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        document.body.appendChild(renderer.domElement);
-
-        // Lighting setup
-        scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-        const dirLight = new THREE.DirectionalLight(0xffffff, 1.4);
-        dirLight.position.set(80, 120, 60);
-        dirLight.castShadow = true;
-        dirLight.shadow.mapSize.set(2048, 2048);
-        dirLight.shadow.camera.near = 1;
-        dirLight.shadow.camera.far = 400;
-        dirLight.shadow.camera.left = -180;
-        dirLight.shadow.camera.right = 180;
-        dirLight.shadow.camera.top = 180;
-        dirLight.shadow.camera.bottom = -180;
-        scene.add(dirLight);
-
-        // Terrain Height function
-        function getTerrainHeight(x, z) {
-            let h = 0;
-            h += Math.sin(x * 0.035) * Math.cos(z * 0.035) * 6.0;
-            h += Math.sin(x * 0.09) * Math.cos(z * 0.08) * 2.8;
-            h += Math.sin(x * 0.2 + z * 0.15) * 1.2;
-            return h;
-        }
-
-        function createTerrain() {
-            const geometry = new THREE.PlaneGeometry(350, 350, 160, 160);
-            const pos = geometry.attributes.position.array;
-
-            for (let i = 0; i < pos.length; i += 3) {
-                const x = pos[i];
-                const y = pos[i + 1];
-                pos[i + 2] = getTerrainHeight(x, -y);
-            }
-            geometry.computeVertexNormals();
-            geometry.rotateX(-Math.PI / 2);
-
-            const material = new THREE.MeshStandardMaterial({
-                color: 0x4a7032,
-                roughness: 0.9,
-                metalness: 0.05
-            });
-
-            const mesh = new THREE.Mesh(geometry, material);
-            mesh.receiveShadow = true;
-            mesh.castShadow = true;
-            scene.add(mesh);
-            return mesh;
-        }
-        createTerrain();
-
-        let car = null;
-        let shieldMesh = null;
-
-        function createCarMesh(bodyColor = 0x27ae60, isEnemy = false) {
-            const group = new THREE.Group();
-
-            // Body
-            const bodyMat = new THREE.MeshStandardMaterial({
-                color: bodyColor,
-                roughness: 0.3,
-                metalness: 0.2,
-                emissive: isEnemy ? 0x440000 : 0x000000
-            });
-            const body = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.65, 4.2), bodyMat);
-            body.position.y = 0.65;
-            body.castShadow = true;
-            group.add(body);
-
-            // Cabin Roof
-            const cabin = new THREE.Mesh(
-                new THREE.BoxGeometry(1.8, 0.55, 2.0),
-                new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.2 })
-            );
-            cabin.position.set(0, 1.2, -0.2);
-            cabin.castShadow = true;
-            group.add(cabin);
-
-            // Wheels
-            const wheelMat = new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.8 });
-            [[-1.1, 0.45, 1.4], [1.1, 0.45, 1.4], [-1.1, 0.45, -1.4], [1.1, 0.45, -1.4]].forEach(p => {
-                const w = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 0.38, 16), wheelMat);
-                w.rotation.z = Math.PI / 2;
-                w.position.set(...p);
-                w.castShadow = true;
-                group.add(w);
-            });
-
-            // If Enemy car: add a glowing red beacon light on top!
-            if (isEnemy) {
-                const beaconGeo = new THREE.CylinderGeometry(0.3, 0.5, 2.5, 12);
-                const beaconMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-                const beacon = new THREE.Mesh(beaconGeo, beaconMat);
-                beacon.position.set(0, 2.2, 0);
-                group.add(beacon);
-
-                // Add red glowing light flare
-                const light = new THREE.PointLight(0xff0000, 3, 12);
-                light.position.set(0, 2.5, 0);
-                group.add(light);
-            }
-
-            return group;
-        }
-
-        car = createCarMesh(0x27ae60, false); // Green Player Car
-        car.position.set(0, getTerrainHeight(0, 0), 0);
-        scene.add(car);
-
-        // Forcefield Shield Mesh attached to Player Car
-        const shieldGeo = new THREE.SphereGeometry(3.3, 24, 24);
-        const shieldMat = new THREE.MeshBasicMaterial({
-            color: 0x00d2ff,
-            transparent: true,
-            opacity: 0.5,
-            wireframe: true
-        });
-        shieldMesh = new THREE.Mesh(shieldGeo, shieldMat);
-        shieldMesh.position.y = 1.0;
-        shieldMesh.visible = false;
-        car.add(shieldMesh);
-
-        const enemyCars = [];
-
-        function spawnEnemyCars() {
-            // Remove previous enemy cars
-            enemyCars.forEach(e => scene.remove(e.mesh));
-            enemyCars.length = 0;
-
-            // Spawn 10 aggressive enemy cars nearby (25 to 60 units away)
-            const count = 10;
-            for (let i = 0; i < count; i++) {
-                const angle = (i / count) * Math.PI * 2 + (Math.random() * 0.4 - 0.2);
-                const radius = 25 + Math.random() * 35; // Spawn close so they attack immediately!
-                const ex = car.position.x + Math.cos(angle) * radius;
-                const ez = car.position.z + Math.sin(angle) * radius;
-
-                const mesh = createCarMesh(0xd32f2f, true); // Red Enemy Car with Beacon
-                const initialY = getTerrainHeight(ex, ez);
-                mesh.position.set(ex, initialY, ez);
-                scene.add(mesh);
-
-                enemyCars.push({
-                    mesh: mesh,
-                    speed: 0.32 + Math.random() * 0.08,
-                    rotSpeed: 0.08
-                });
-            }
-        }
-
-        function updateEnemyCars(dt) {
-            if (!car || !isPlaying) return;
-
-            let minDistance = 999;
-
-            enemyCars.forEach(enemy => {
-                const targetPos = car.position.clone();
-                const currentPos = enemy.mesh.position.clone();
-
-                const dist = currentPos.distanceTo(targetPos);
-                if (dist < minDistance) minDistance = dist;
-
-                // If enemy gets too far away (e.g. player drove off), respawn enemy closer!
-                if (dist > 110) {
-                    const spawnAngle = Math.random() * Math.PI * 2;
-                    const spawnRad = 35 + Math.random() * 20;
-                    enemy.mesh.position.x = car.position.x + Math.cos(spawnAngle) * spawnRad;
-                    enemy.mesh.position.z = car.position.z + Math.sin(spawnAngle) * spawnRad;
-                    enemy.mesh.position.y = getTerrainHeight(enemy.mesh.position.x, enemy.mesh.position.z);
-                    return;
-                }
-
-                // Smoothly orient enemy car toward player
-                const lookTarget = new THREE.Vector3(targetPos.x, enemy.mesh.position.y, targetPos.z);
-                const tempMatrix = new THREE.Matrix4();
-                tempMatrix.lookAt(enemy.mesh.position, lookTarget, new THREE.Vector3(0, 1, 0));
-                
-                const targetQuat = new THREE.Quaternion().setFromRotationMatrix(tempMatrix);
-                // Rotate forward vector (-Z) towards target
-                enemy.mesh.quaternion.slerp(targetQuat, enemy.rotSpeed);
-
-                // Move forward towards player
-                const moveDir = new THREE.Vector3(0, 0, -1).applyQuaternion(enemy.mesh.quaternion);
-                enemy.mesh.position.addScaledVector(moveDir, enemy.speed * (dt * 60));
-                enemy.mesh.position.y = getTerrainHeight(enemy.mesh.position.x, enemy.mesh.position.z);
-
-                // Touch Collision detection with Player Car
-                if (dist < 3.2) {
-                    if (isShieldActive) {
-                        // Blast enemy away when shield is active!
-                        const bounceVec = enemy.mesh.position.clone().sub(car.position).normalize().multiplyScalar(18);
-                        enemy.mesh.position.add(bounceVec);
-                    } else {
-                        // Touch without shield = Immediate Game Over!
-                        triggerGameOver();
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Roko MP3 Converter </title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- LAME MP3 Encoder CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js"></script>
+    <!-- JSZip CDN for batch zip download -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            500: '#22c55e',
+                            600: '#16a34a',
+                            700: '#15803d',
+                            900: '#14532d',
+                        },
+                        accent: {
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
                     }
                 }
-            });
-
-            // Update warning distance text
-            const warningElem = document.getElementById('enemy-warning');
-            if (warningElem) {
-                warningElem.textContent = `⚠️ ENEMY CLOSING IN: ${Math.round(minDistance)}m!`;
             }
         }
+    </script>
+    <style>
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+        .gradient-text {
+            background: linear-gradient(135deg, #22c55e 0%, #6366f1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .drop-glow {
+            box-shadow: 0 0 25px -5px rgba(34, 197, 94, 0.25);
+        }
+        .nav-tab-active {
+            background-color: rgba(34, 197, 94, 0.15);
+            color: #22c55e;
+            border-color: rgba(34, 197, 94, 0.4);
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans min-h-screen flex flex-col transition-colors duration-300">
 
-        const checkpointLocations = [
-            { x: 35, z: -45 },
-            { x: -45, z: -90 },
-            { x: -100, z: -35 },
-            { x: -75, z: 45 },
-            { x: 0, z: 85 },
-            { x: 75, z: 110 },
-            { x: 110, z: 25 },
-            { x: 55, z: -25 },
-            { x: 0, z: 0 } // Checkpoint 9 - Final Home
-        ];
-
-        let currentCheckpointIdx = 0;
-        let checkpointMesh = null;
-
-        function createCheckpointMesh(x, z) {
-            if (checkpointMesh) scene.remove(checkpointMesh);
-
-            const group = new THREE.Group();
+    <!-- Header -->
+    <header class="border-b border-slate-800 bg-slate-900/90 backdrop-blur-md sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
             
-            // Golden Torus Ring
-            const ringGeo = new THREE.TorusGeometry(4.8, 0.45, 16, 32);
-            const ringMat = new THREE.MeshStandardMaterial({
-                color: 0xffd700,
-                emissive: 0xffa500,
-                emissiveIntensity: 0.9,
-                metalness: 0.85
-            });
-            const ring = new THREE.Mesh(ringGeo, ringMat);
-            ring.position.y = 5.0;
-            group.add(ring);
+            <!-- Logo & Brand -->
+            <div class="flex items-center space-x-3 cursor-pointer" onclick="switchTab('converter')">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-500 to-accent-600 flex items-center justify-center shadow-lg shadow-brand-500/20">
+                    <i class="fa-solid font-bold fa-compact-disc text-white text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-extrabold tracking-tight flex items-center gap-2">
+                        ROKO <span class="gradient-text font-black">MP3</span>
+                    </h1>
+                    <p class="text-[10px] text-slate-400 -mt-1 font-medium tracking-wider">AUDIO CONVERTER</p>
+                </div>
+            </div>
 
-            // Vertical Light Pillar
-            const pillarGeo = new THREE.CylinderGeometry(4.2, 4.2, 30, 16, 1, true);
-            const pillarMat = new THREE.MeshBasicMaterial({
-                color: 0xffd700,
-                transparent: true,
-                opacity: 0.25,
-                side: THREE.DoubleSide
-            });
-            const pillar = new THREE.Mesh(pillarGeo, pillarMat);
-            pillar.position.y = 15;
-            group.add(pillar);
+            <!-- Page Navigation Tabs -->
+            <nav class="flex items-center space-x-1 sm:space-x-2 bg-slate-950/80 p-1.5 rounded-2xl border border-slate-800">
+                <button id="navBtnConverter" onclick="switchTab('converter')" class="nav-tab-active px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-2 transition-all border border-transparent">
+                    <i class="fa-solid fa-arrows-rotate text-sm"></i>
+                    <span>Converter</span>
+                </button>
+                <button id="navBtnHistory" onclick="switchTab('history')" class="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-400 hover:text-slate-200 hover:bg-slate-800 flex items-center gap-2 transition-all border border-transparent">
+                    <i class="fa-solid fa-clock-rotate-left text-sm"></i>
+                    <span>History</span>
+                    <span id="historyBadge" class="bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full text-[10px] font-bold">0</span>
+                </button>
+                <button id="navBtnSettings" onclick="switchTab('settings')" class="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-400 hover:text-slate-200 hover:bg-slate-800 flex items-center gap-2 transition-all border border-transparent">
+                    <i class="fa-solid fa-gear text-sm"></i>
+                    <span>Settings</span>
+                </button>
+            </nav>
 
-            const groundY = getTerrainHeight(x, z);
-            group.position.set(x, groundY, z);
+            <!-- Theme Toggle -->
+            <div class="hidden sm:flex items-center space-x-3">
+                <button id="themeToggle" class="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors border border-slate-700/50" title="Toggle Theme">
+                    <i class="fa-solid fa-moon text-sm"></i>
+                </button>
+            </div>
+        </div>
+    </header>
 
-            checkpointMesh = group;
-            scene.add(checkpointMesh);
+    <!-- Main Container -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+        <!-- VIEW 1: CONVERTER PAGE -->
+        <div id="viewConverter" class="space-y-8">
+            <section class="text-center space-y-2 max-w-2xl mx-auto">
+                <h2 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-100">
+                    Extract <span class="gradient-text">MP3 Audio</span> from MP4
+                </h2>
+                <p class="text-slate-400 text-xs sm:text-sm">
+                    100% Client-Side. Files stay safe on your device.
+                </p>
+            </section>
+
+            <!-- Upload Dropzone -->
+            <section class="max-w-4xl mx-auto">
+                <div id="dropzone" class="relative group cursor-pointer border-2 border-dashed border-slate-700 hover:border-brand-500 rounded-3xl p-8 sm:p-12 text-center bg-slate-900/40 hover:bg-slate-900/80 transition-all duration-300 drop-glow">
+                    <input type="file" id="fileInput" multiple accept="video/mp4,video/x-m4v,video/*,audio/*" class="hidden">
+                    
+                    <div class="flex flex-col items-center justify-center space-y-4">
+                        <div class="w-16 h-16 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center group-hover:scale-110 group-hover:border-brand-500 group-hover:bg-brand-500/10 transition-all duration-300">
+                            <i class="fa-solid fa-cloud-arrow-up text-2xl text-brand-500"></i>
+                        </div>
+                        
+                        <div class="space-y-1">
+                            <p class="text-base sm:text-lg font-semibold text-slate-200">
+                                Drag & Drop MP4 Video Files
+                            </p>
+                            <p class="text-xs sm:text-sm text-slate-400">
+                                or <span class="text-brand-500 underline font-medium">browse files from computer</span>
+                            </p>
+                        </div>
+
+                        <div class="flex flex-wrap justify-center gap-1.5 pt-2 text-[11px] text-slate-500">
+                            <span class="bg-slate-800 px-2 py-0.5 rounded border border-slate-700/50">MP4</span>
+                            <span class="bg-slate-800 px-2 py-0.5 rounded border border-slate-700/50">MOV</span>
+                            <span class="bg-slate-800 px-2 py-0.5 rounded border border-slate-700/50">MKV</span>
+                            <span class="bg-slate-800 px-2 py-0.5 rounded border border-slate-700/50">WEBM</span>
+                            <span class="bg-slate-800 px-2 py-0.5 rounded border border-slate-700/50">M4A</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Converter Queue Section -->
+            <section id="queueSection" class="hidden max-w-4xl mx-auto space-y-4">
+                <div class="flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-900/90 border border-slate-800 p-4 rounded-2xl">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-lg bg-brand-500/20 text-brand-500 flex items-center justify-center font-bold">
+                            <span id="queueCount">0</span>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-slate-200 text-sm">Active File Queue</h3>
+                            <p class="text-xs text-slate-400" id="queueTotalSize">0 MB total</p>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center flex-wrap gap-2 w-full sm:w-auto justify-end">
+                        <button id="clearAllBtn" class="px-3.5 py-1.5 bg-slate-800 hover:bg-red-500/10 text-slate-300 hover:text-red-400 border border-slate-700 rounded-xl text-xs font-semibold transition-all">
+                            <i class="fa-solid fa-trash-can mr-1"></i> Clear
+                        </button>
+                        <button id="convertAllBtn" class="px-4 py-1.5 bg-gradient-to-r from-brand-600 to-emerald-500 hover:from-brand-500 hover:to-emerald-400 text-white font-bold rounded-xl text-xs shadow-lg shadow-brand-500/20 transition-all flex items-center gap-1.5">
+                            <i class="fa-solid fa-bolt"></i> Convert All
+                        </button>
+                        <button id="downloadZipBtn" disabled class="px-4 py-1.5 bg-slate-800 text-slate-500 border border-slate-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-not-allowed">
+                            <i class="fa-solid fa-file-zipper"></i> ZIP Download
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Queue Cards List -->
+                <div id="fileList" class="space-y-3">
+                    <!-- Dynamically populated cards -->
+                </div>
+            </section>
+        </div>
+
+        <!-- VIEW 2: SETTINGS PAGE -->
+        <div id="viewSettings" class="hidden max-w-4xl mx-auto space-y-6">
+            <div class="border-b border-slate-800 pb-4">
+                <h2 class="text-2xl font-bold text-slate-100 flex items-center gap-2.5">
+                    <i class="fa-solid fa-sliders text-brand-500"></i> Converter Preferences & Settings
+                </h2>
+                <p class="text-xs text-slate-400 mt-1">Configure audio quality, volume levels, default ID3 metadata, and conversion behaviors.</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                <!-- Audio Bitrate & Quality -->
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+                    <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                        <i class="fa-solid fa-gauge-high text-brand-500"></i> Audio Encoding Quality
+                    </h3>
+                    
+                    <div class="space-y-3 text-xs">
+                        <div>
+                            <label class="block font-semibold text-slate-300 mb-1">Target MP3 Bitrate</label>
+                            <select id="settingBitrate" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:border-brand-500 focus:outline-none">
+                                <option value="320">320 kbps (Extreme HD Quality)</option>
+                                <option value="256">256 kbps (High Quality)</option>
+                                <option value="192" selected>192 kbps (Standard Recommended)</option>
+                                <option value="128">128 kbps (Compact File Size)</option>
+                                <option value="64">64 kbps (Voice Recording)</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block font-semibold text-slate-300 mb-1">Sample Rate</label>
+                            <select id="settingSampleRate" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:border-brand-500 focus:outline-none">
+                                <option value="44100" selected>44.1 kHz (CD Standard)</option>
+                                <option value="48000">48.0 kHz (Studio Quality)</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block font-semibold text-slate-300 mb-1">Audio Channels</label>
+                            <select id="settingChannels" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-slate-200 focus:border-brand-500 focus:outline-none">
+                                <option value="stereo" selected>Stereo (2 Channels)</option>
+                                <option value="mono">Mono (1 Channel)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Volume & Output Controls -->
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+                    <h3 class="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                        <i class="fa-solid fa-volume-high text-accent-500"></i> Audio Volume & Automation
+                    </h3>
+
+                    <div class="space-y-4 text-xs">
+                        <div>
+                            <div class="flex justify-between font-semibold text-slate-300 mb-1">
+                                <span>Default Volume Amplification</span>
+                                <span id="settingVolumeVal" class="text-brand-500 font-bold">100%</span>
+                            </div>
+                            <input type="range" id="settingVolume" min="50" max="200" value="100" class="w-full accent-brand-500">
+                        </div>
+
+                        <div class="pt-2 border-t border-slate-800/80 space-y-2.5">
+                            <label class="flex items-center justify-between cursor-pointer">
+                                <span class="text-slate-300 font-medium">Auto Download MP3 when finished</span>
+                                <input type="checkbox" id="settingAutoDownload" class="w-4 h-4 accent-brand-500 rounded">
+                            </label>
+
+                            <label class="flex items-center justify-between cursor-pointer">
+                                <span class="text-slate-300 font-medium">Auto-start conversion upon drag & drop</span>
+                                <input type="checkbox" id="settingAutoStart" class="w-4 h-4 accent-brand-500 rounded">
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Save & Action Footer -->
+            <div class="flex items-center justify-between pt-4 border-t border-slate-800">
+                <button id="resetSettingsBtn" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-all">
+                    Reset Defaults
+                </button>
+                <button id="saveSettingsBtn" class="px-6 py-2.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-xs font-bold shadow-lg transition-all flex items-center gap-2">
+                    <i class="fa-solid fa-floppy-disk"></i> Save Settings
+                </button>
+            </div>
+        </div>
+
+        <!-- VIEW 3: HISTORY PAGE -->
+        <div id="viewHistory" class="hidden max-w-5xl mx-auto space-y-6">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                <div>
+                    <h2 class="text-2xl font-bold text-slate-100 flex items-center gap-2.5">
+                        <i class="fa-solid fa-clock-rotate-left text-brand-500"></i> Conversion History Log
+                    </h2>
+                    <p class="text-xs text-slate-400 mt-1">All converted files logged during this browser session.</p>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <button id="clearHistoryBtn" class="px-4 py-2 bg-slate-900 hover:bg-red-500/10 text-slate-300 hover:text-red-400 border border-slate-800 hover:border-red-500/30 rounded-xl text-xs font-semibold transition-all">
+                        <i class="fa-solid fa-trash-can mr-1.5"></i> Clear History
+                    </button>
+                </div>
+            </div>
+
+            <!-- Search & Filter Bar -->
+            <div class="flex items-center bg-slate-900 border border-slate-800 rounded-2xl px-3.5 py-2">
+                <i class="fa-solid fa-magnifying-glass text-slate-500 text-xs mr-2.5"></i>
+                <input type="text" id="historySearch" placeholder="Search conversion history by title or file name..." class="w-full bg-transparent text-xs text-slate-200 focus:outline-none">
+            </div>
+
+            <!-- History List Table Container -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-950 text-slate-400 font-semibold border-b border-slate-800 uppercase tracking-wider text-[10px]">
+                            <tr>
+                                <th class="py-3 px-4">File Name</th>
+                                <th class="py-3 px-4">Duration</th>
+                                <th class="py-3 px-4">MP3 Bitrate</th>
+                                <th class="py-3 px-4">Size</th>
+                                <th class="py-3 px-4">Date Converted</th>
+                                <th class="py-3 px-4 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyTableBody" class="divide-y divide-slate-800/60 text-slate-300">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Empty state placeholder -->
+                <div id="historyEmpty" class="py-12 text-center text-slate-500 space-y-2">
+                    <i class="fa-solid fa-folder-open text-3xl"></i>
+                    <p class="text-xs font-semibold">No conversion history recorded yet.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Docked Audio Player for Previewing Converted Files -->
+        <section id="playerDock" class="hidden mt-8 max-w-4xl mx-auto bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-2xl relative overflow-hidden">
+            <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-brand-500 via-accent-500 to-emerald-400"></div>
+            
+            <div class="flex flex-col md:flex-row items-center gap-4">
+                <!-- Canvas Visualizer -->
+                <div class="w-full md:w-1/3 bg-slate-950 rounded-2xl p-2 border border-slate-800 flex flex-col items-center">
+                    <canvas id="visualizerCanvas" class="w-full h-20 rounded-lg bg-slate-950"></canvas>
+                    <p class="text-[10px] text-slate-500 mt-1.5 font-mono" id="playerFileName">Audio Preview</p>
+                </div>
+
+                <!-- Controls -->
+                <div class="w-full md:w-2/3 space-y-2.5">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <span class="text-[10px] font-bold text-brand-500 uppercase tracking-wider">Preview Player</span>
+                            <h4 class="text-sm font-bold text-slate-200 truncate max-w-xs" id="playerTitle">Selected Audio</h4>
+                        </div>
+                        <span id="playerTimer" class="font-mono text-xs text-slate-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-800">00:00 / 00:00</span>
+                    </div>
+
+                    <input type="range" id="playerSeek" value="0" min="0" max="100" class="w-full accent-brand-500 cursor-pointer h-1 bg-slate-800 rounded-lg">
+
+                    <div class="flex items-center justify-between pt-1">
+                        <div class="flex items-center gap-2">
+                            <button id="playerPlayBtn" class="w-9 h-9 rounded-xl bg-brand-500 hover:bg-brand-400 text-slate-950 flex items-center justify-center font-bold transition-all">
+                                <i class="fa-solid fa-play text-sm"></i>
+                            </button>
+                            <button id="playerStopBtn" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center text-xs transition-all">
+                                <i class="fa-solid fa-stop"></i>
+                            </button>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-volume-high text-xs text-slate-400"></i>
+                            <input type="range" id="playerVolume" min="0" max="1" step="0.05" value="1" class="w-16 accent-brand-500">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <audio id="audioElement" class="hidden"></audio>
+        </section>
+
+    </main>
+
+    <!-- Toast Notifications -->
+    <div id="toastContainer" class="fixed bottom-5 right-5 z-50 space-y-2 pointer-events-none"></div>
+
+    <script>
+        // Global Application State
+        const fileState = [];
+        const conversionHistory = [];
+        let audioCtx = null;
+        let visualizerAnalyser = null;
+
+        // Audio Context initialization helper
+        function getAudioContext() {
+            if (!audioCtx) {
+                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContextClass();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            return audioCtx;
         }
 
-        function checkCheckpointCollision() {
-            if (!car || currentCheckpointIdx >= checkpointLocations.length) return;
+        // Settings State
+        const appSettings = {
+            bitrate: '192',
+            sampleRate: '44100',
+            channels: 'stereo',
+            volume: 100,
+            autoDownload: false,
+            autoStart: false
+        };
 
-            const target = checkpointLocations[currentCheckpointIdx];
-            const dx = car.position.x - target.x;
-            const dz = car.position.z - target.z;
-            const dist = Math.sqrt(dx * dx + dz * dz);
+        // DOM Elements
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('fileInput');
+        const queueSection = document.getElementById('queueSection');
+        const fileList = document.getElementById('fileList');
+        const queueCount = document.getElementById('queueCount');
+        const queueTotalSize = document.getElementById('queueTotalSize');
+        const convertAllBtn = document.getElementById('convertAllBtn');
+        const downloadZipBtn = document.getElementById('downloadZipBtn');
+        const clearAllBtn = document.getElementById('clearAllBtn');
 
-            if (dist < 6.5) {
-                currentCheckpointIdx++;
-                if (currentCheckpointIdx < checkpointLocations.length) {
-                    createCheckpointMesh(checkpointLocations[currentCheckpointIdx].x, checkpointLocations[currentCheckpointIdx].z);
-                    updateCheckpointUI();
-                } else {
-                    // Passed all 9 Checkpoints!
-                    triggerWinGame();
+        // Player DOM
+        const playerDock = document.getElementById('playerDock');
+        const audioElement = document.getElementById('audioElement');
+        const playerPlayBtn = document.getElementById('playerPlayBtn');
+        const playerStopBtn = document.getElementById('playerStopBtn');
+        const playerSeek = document.getElementById('playerSeek');
+        const playerVolume = document.getElementById('playerVolume');
+        const playerTitle = document.getElementById('playerTitle');
+        const playerFileName = document.getElementById('playerFileName');
+        const playerTimer = document.getElementById('playerTimer');
+        const visualizerCanvas = document.getElementById('visualizerCanvas');
+
+        // Load saved settings from localStorage & bind instant change listeners
+        function loadSettings() {
+            try {
+                const saved = localStorage.getItem('roko_mp3_settings');
+                if (saved) {
+                    Object.assign(appSettings, JSON.parse(saved));
                 }
+            } catch (e) {
+                console.warn("LocalStorage unaccessible", e);
+            }
+
+            document.getElementById('settingBitrate').value = appSettings.bitrate;
+            document.getElementById('settingSampleRate').value = appSettings.sampleRate;
+            document.getElementById('settingChannels').value = appSettings.channels;
+            document.getElementById('settingVolume').value = appSettings.volume;
+            document.getElementById('settingVolumeVal').textContent = `${appSettings.volume}%`;
+            document.getElementById('settingAutoDownload').checked = !!appSettings.autoDownload;
+            document.getElementById('settingAutoStart').checked = !!appSettings.autoStart;
+
+            // Bind live update listeners so settings apply instantly
+            bindSettingsListeners();
+        }
+
+        function bindSettingsListeners() {
+            const bitrateEl = document.getElementById('settingBitrate');
+            const sampleRateEl = document.getElementById('settingSampleRate');
+            const channelsEl = document.getElementById('settingChannels');
+            const volumeEl = document.getElementById('settingVolume');
+            const autoDownloadEl = document.getElementById('settingAutoDownload');
+            const autoStartEl = document.getElementById('settingAutoStart');
+
+            bitrateEl.onchange = () => saveCurrentSettings();
+            sampleRateEl.onchange = () => saveCurrentSettings();
+            channelsEl.onchange = () => saveCurrentSettings();
+            
+            volumeEl.oninput = (e) => {
+                document.getElementById('settingVolumeVal').textContent = `${e.target.value}%`;
+                saveCurrentSettings();
+            };
+
+            autoDownloadEl.onchange = () => {
+                appSettings.autoDownload = autoDownloadEl.checked;
+                saveCurrentSettings();
+            };
+
+            autoStartEl.onchange = () => {
+                appSettings.autoStart = autoStartEl.checked;
+                saveCurrentSettings();
+            };
+        }
+
+        function saveCurrentSettings() {
+            appSettings.bitrate = document.getElementById('settingBitrate').value;
+            appSettings.sampleRate = document.getElementById('settingSampleRate').value;
+            appSettings.channels = document.getElementById('settingChannels').value;
+            appSettings.volume = parseInt(document.getElementById('settingVolume').value, 10);
+            appSettings.autoDownload = document.getElementById('settingAutoDownload').checked;
+            appSettings.autoStart = document.getElementById('settingAutoStart').checked;
+
+            try {
+                localStorage.setItem('roko_mp3_settings', JSON.stringify(appSettings));
+            } catch(e) {}
+        }
+
+        // View Navigation Switcher
+        function switchTab(tabName) {
+            const views = ['converter', 'history', 'settings'];
+            views.forEach(v => {
+                const viewEl = document.getElementById(`view${capitalize(v)}`);
+                const navBtn = document.getElementById(`navBtn${capitalize(v)}`);
+                if (v === tabName) {
+                    viewEl.classList.remove('hidden');
+                    navBtn.className = "nav-tab-active px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-2 transition-all border border-transparent";
+                } else {
+                    viewEl.classList.add('hidden');
+                    navBtn.className = "px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-400 hover:text-slate-200 hover:bg-slate-800 flex items-center gap-2 transition-all border border-transparent";
+                }
+            });
+
+            if (tabName === 'history') {
+                renderHistoryTable();
             }
         }
 
-        function updateCheckpointUI() {
-            document.getElementById('checkpoint-tracker').textContent =
-                `Checkpoint ${currentCheckpointIdx + 1} / ${checkpointLocations.length}`;
+        function capitalize(str) {
+            return str.charAt(0).toUpperCase() + str.slice(1);
         }
 
-        const keys = {};
-        let isShieldActive = false;
+        // Theme Toggle
+        document.getElementById('themeToggle').addEventListener('click', () => {
+            document.documentElement.classList.toggle('dark');
+            const isDark = document.documentElement.classList.contains('dark');
+            document.getElementById('themeToggle').innerHTML = isDark ? '<i class="fa-solid fa-moon text-sm"></i>' : '<i class="fa-solid fa-sun text-sm text-amber-400"></i>';
+        });
 
-        window.addEventListener('keydown', e => {
-            keys[e.key.toLowerCase()] = true;
-            if (e.code === 'Space') {
-                isShieldActive = true;
-                updateShieldUI();
+        // Dropzone listeners
+        dropzone.addEventListener('click', () => fileInput.click());
+        dropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropzone.classList.add('border-brand-500', 'bg-brand-500/10');
+        });
+        dropzone.addEventListener('dragleave', () => {
+            dropzone.classList.remove('border-brand-500', 'bg-brand-500/10');
+        });
+        dropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('border-brand-500', 'bg-brand-500/10');
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                handleFiles(e.dataTransfer.files);
             }
         });
 
-        window.addEventListener('keyup', e => {
-            keys[e.key.toLowerCase()] = false;
-            if (e.code === 'Space') {
-                isShieldActive = false;
-                updateShieldUI();
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files.length > 0) {
+                handleFiles(e.target.files);
+                fileInput.value = '';
             }
         });
 
-        function updateShieldUI() {
-            if (shieldMesh) shieldMesh.visible = isShieldActive;
-            const statusElem = document.getElementById('shield-status');
-            statusElem.style.display = isShieldActive ? 'block' : 'none';
+        function handleFiles(files) {
+            let addedCount = 0;
+            Array.from(files).forEach(file => {
+                if (file.type.startsWith('video/') || file.type.startsWith('audio/') || file.name.match(/\.(mp4|mov|mkv|webm|avi|3gp|m4a|wav|aac)$/i)) {
+                    const fileObj = {
+                        id: 'file_' + Math.random().toString(36).substr(2, 9),
+                        file: file,
+                        name: file.name,
+                        size: file.size,
+                        duration: 0,
+                        status: 'idle',
+                        progress: 0,
+                        mp3Blob: null,
+                        audioBuffer: null,
+                        title: file.name.replace(/\.[^/.]+$/, "")
+                    };
+                    fileState.push(fileObj);
+                    addedCount++;
+                    probeFileDuration(fileObj);
+                }
+            });
+
+            if (addedCount > 0) {
+                showToast(`Added ${addedCount} file(s) to converter`, 'success');
+                renderFileList();
+
+                // Trigger Auto-Start if enabled
+                if (appSettings.autoStart) {
+                    setTimeout(() => {
+                        convertAllBtn.click();
+                    }, 300);
+                }
+            } else {
+                showToast('Please select valid media files (MP4, MOV, etc.)', 'warning');
+            }
         }
 
-        function bindTouchControl(elementId, keyName) {
-            const btn = document.getElementById(elementId);
-            if (!btn) return;
+        function probeFileDuration(fileObj) {
+            const url = URL.createObjectURL(fileObj.file);
+            const tempVid = document.createElement('video');
+            tempVid.preload = 'metadata';
+            tempVid.src = url;
+            tempVid.onloadedmetadata = () => {
+                fileObj.duration = tempVid.duration || 0;
+                URL.revokeObjectURL(url);
+                updateFileCardUI(fileObj.id);
+            };
+            tempVid.onerror = () => {
+                URL.revokeObjectURL(url);
+            };
+        }
 
-            const handleStart = (e) => {
-                e.preventDefault();
-                if (keyName === 'space') {
-                    isShieldActive = true;
-                    updateShieldUI();
-                } else {
-                    keys[keyName] = true;
+        function renderFileList() {
+            if (fileState.length === 0) {
+                queueSection.classList.add('hidden');
+                return;
+            }
+
+            queueSection.classList.remove('hidden');
+            queueCount.textContent = fileState.length;
+            const totalBytes = fileState.reduce((acc, f) => acc + f.size, 0);
+            queueTotalSize.textContent = `${(totalBytes / (1024 * 1024)).toFixed(1)} MB total`;
+
+            fileList.innerHTML = '';
+
+            fileState.forEach(item => {
+                const card = document.createElement('div');
+                card.id = item.id;
+                card.className = "bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-lg space-y-3";
+
+                const isDone = item.status === 'done';
+                const isProcessing = item.status === 'processing';
+
+                card.innerHTML = `
+                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                        <div class="flex items-center space-x-3 min-w-0">
+                            <div class="w-10 h-10 rounded-xl ${isDone ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-brand-500'} flex items-center justify-center font-bold text-lg flex-shrink-0">
+                                <i class="fa-solid ${isDone ? 'fa-circle-check text-emerald-500' : 'fa-file-video'}"></i>
+                            </div>
+                            <div class="min-w-0">
+                                <h4 class="font-bold text-slate-200 text-sm truncate" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}.mp3</h4>
+                                <div class="flex items-center gap-3 text-xs text-slate-400 mt-0.5">
+                                    <span>${(item.size / (1024 * 1024)).toFixed(1)} MB</span>
+                                    <span>${formatTime(item.duration)}</span>
+                                    <span id="${item.id}_statusText" class="font-semibold ${getStatusColor(item.status)}">${item.status.toUpperCase()}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2 flex-wrap justify-end">
+                            ${isDone ? `
+                                <button onclick="previewConvertedAudio('${item.id}')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors border border-slate-700">
+                                    <i class="fa-solid fa-play text-brand-500"></i> Preview
+                                </button>
+                                <button onclick="downloadSingleMp3('${item.id}')" class="px-3.5 py-1.5 bg-brand-600 hover:bg-brand-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md transition-colors">
+                                    <i class="fa-solid fa-download"></i> Save MP3
+                                </button>
+                            ` : `
+                                <button onclick="toggleOptionsModal('${item.id}')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold flex items-center gap-1 transition-colors border border-slate-700">
+                                    <i class="fa-solid fa-pen-to-square"></i> Rename
+                                </button>
+                                <button onclick="startSingleConversion('${item.id}')" ${isProcessing ? 'disabled' : ''} class="px-3.5 py-1.5 bg-brand-600 hover:bg-brand-500 disabled:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-md transition-colors">
+                                    <i class="fa-solid ${isProcessing ? 'fa-spinner fa-spin' : 'fa-bolt'}"></i> ${isProcessing ? 'Converting...' : 'Convert'}
+                                </button>
+                            `}
+                            <button onclick="removeFile('${item.id}')" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-red-500/20 text-slate-400 hover:text-red-400 flex items-center justify-center text-xs transition-colors border border-slate-700">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="${item.id}_progressContainer" class="${isProcessing || isDone ? 'block' : 'hidden'} space-y-1">
+                        <div class="flex justify-between text-[11px] font-mono text-slate-400">
+                            <span id="${item.id}_progressStage">Processing...</span>
+                            <span id="${item.id}_progressPercent">${item.progress}%</span>
+                        </div>
+                        <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden border border-slate-700/50">
+                            <div id="${item.id}_progressBar" class="h-full bg-gradient-to-r from-brand-500 to-accent-500 transition-all duration-200" style="width: ${item.progress}%"></div>
+                        </div>
+                    </div>
+
+                    <div id="${item.id}_optionsPanel" class="hidden pt-2.5 border-t border-slate-800">
+                        <div>
+                            <label class="block text-slate-400 font-semibold mb-1">New Audio Output Name</label>
+                            <input type="text" value="${escapeHtml(item.title)}" onchange="updateTag('${item.id}', 'title', this.value)" placeholder="Enter new filename..." class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-200 focus:border-brand-500 focus:outline-none">
+                        </div>
+                    </div>
+                `;
+
+                fileList.appendChild(card);
+            });
+
+            checkZipButtonState();
+        }
+
+        async function startSingleConversion(id) {
+            const item = fileState.find(f => f.id === id);
+            if (!item || item.status === 'processing') return;
+
+            item.status = 'processing';
+            item.progress = 5;
+            updateFileCardUI(id);
+
+            try {
+                const ctx = getAudioContext();
+                updateProgressUI(id, 15, 'Reading media bytes...');
+                const arrayBuffer = await item.file.arrayBuffer();
+
+                updateProgressUI(id, 35, 'Extracting audio channels...');
+                const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+                item.audioBuffer = audioBuffer;
+
+                updateProgressUI(id, 50, 'Encoding MP3 stream...');
+                
+                const mp3Blob = await convertBufferToMp3(audioBuffer, {
+                    bitrate: parseInt(appSettings.bitrate, 10),
+                    sampleRate: parseInt(appSettings.sampleRate, 10),
+                    channels: appSettings.channels,
+                    volume: appSettings.volume
+                }, (percent) => {
+                    updateProgressUI(id, 50 + Math.floor(percent * 0.45), `Encoding MP3 (${percent}%)...`);
+                });
+
+                item.mp3Blob = mp3Blob;
+                item.status = 'done';
+                item.progress = 100;
+                updateProgressUI(id, 100, 'Conversion Complete!');
+                
+                // Add entry to history log
+                logToHistory(item);
+
+                showToast(`Converted ${item.title}.mp3 successfully!`, 'success');
+                renderFileList();
+
+                if (appSettings.autoDownload) {
+                    downloadSingleMp3(item.id);
+                }
+
+            } catch (err) {
+                console.error("Conversion error:", err);
+                item.status = 'error';
+                item.progress = 0;
+                updateProgressUI(id, 0, 'Failed to extract audio');
+                showToast(`Error converting file`, 'error');
+                renderFileList();
+            }
+        }
+
+        function convertBufferToMp3(audioBuffer, options, onProgress) {
+            return new Promise((resolve, reject) => {
+                try {
+                    const numChannels = audioBuffer.numberOfChannels;
+                    const nativeSampleRate = audioBuffer.sampleRate;
+
+                    const startSample = 0;
+                    const endSample = audioBuffer.length;
+                    const totalSamples = endSample;
+
+                    const leftChannel = audioBuffer.getChannelData(0);
+                    const rightChannel = numChannels > 1 ? audioBuffer.getChannelData(1) : leftChannel;
+
+                    const outChannels = options.channels === 'mono' ? 1 : Math.min(2, numChannels);
+
+                    if (typeof lamejs === 'undefined') {
+                        const wavBlob = audioBufferToWavBlob(audioBuffer, startSample, endSample);
+                        resolve(wavBlob);
+                        return;
+                    }
+
+                    const mp3encoder = new lamejs.Mp3Encoder(outChannels, nativeSampleRate, options.bitrate);
+                    const mp3Data = [];
+                    const gain = (options.volume || 100) / 100;
+
+                    let sampleIdx = startSample;
+                    const chunkSize = 11520;
+
+                    function processChunk() {
+                        const end = Math.min(sampleIdx + chunkSize, endSample);
+                        const count = end - sampleIdx;
+
+                        if (count <= 0) {
+                            const mp3bufEnd = mp3encoder.flush();
+                            if (mp3bufEnd.length > 0) mp3Data.push(mp3bufEnd);
+                            const blob = new Blob(mp3Data, { type: 'audio/mp3' });
+                            resolve(blob);
+                            return;
+                        }
+
+                        const leftChunk = new Int16Array(count);
+                        const rightChunk = outChannels === 2 ? new Int16Array(count) : null;
+
+                        for (let i = sampleIdx, j = 0; i < end; i++, j++) {
+                            let sL = leftChannel[i] * gain;
+                            sL = Math.max(-1, Math.min(1, sL));
+                            leftChunk[j] = sL < 0 ? sL * 0x8000 : sL * 0x7FFF;
+
+                            if (outChannels === 2) {
+                                let sR = rightChannel[i] * gain;
+                                sR = Math.max(-1, Math.min(1, sR));
+                                rightChunk[j] = sR < 0 ? sR * 0x8000 : sR * 0x7FFF;
+                            }
+                        }
+
+                        let mp3buf = outChannels === 2 ? mp3encoder.encodeBuffer(leftChunk, rightChunk) : mp3encoder.encodeBuffer(leftChunk);
+                        if (mp3buf.length > 0) mp3Data.push(mp3buf);
+
+                        sampleIdx = end;
+                        const pct = Math.min(100, Math.round((sampleIdx / totalSamples) * 100));
+                        if (onProgress) onProgress(pct);
+
+                        setTimeout(processChunk, 0);
+                    }
+
+                    processChunk();
+                } catch (err) {
+                    reject(err);
+                }
+            });
+        }
+
+        document.getElementById('saveSettingsBtn').addEventListener('click', () => {
+            appSettings.bitrate = document.getElementById('settingBitrate').value;
+            appSettings.sampleRate = document.getElementById('settingSampleRate').value;
+            appSettings.channels = document.getElementById('settingChannels').value;
+            appSettings.volume = parseInt(document.getElementById('settingVolume').value, 10);
+            appSettings.autoDownload = document.getElementById('settingAutoDownload').checked;
+            appSettings.autoStart = document.getElementById('settingAutoStart').checked;
+
+            try {
+                localStorage.setItem('roko_mp3_settings', JSON.stringify(appSettings));
+            } catch(e) {}
+
+            showToast('Settings saved successfully!', 'success');
+        });
+
+        document.getElementById('resetSettingsBtn').addEventListener('click', () => {
+            localStorage.removeItem('roko_mp3_settings');
+            appSettings.bitrate = '192';
+            appSettings.sampleRate = '44100';
+            appSettings.channels = 'stereo';
+            appSettings.volume = 100;
+            appSettings.autoDownload = false;
+            appSettings.autoStart = false;
+            loadSettings();
+            showToast('Settings reset to defaults', 'info');
+        });
+
+        function logToHistory(item) {
+            const entry = {
+                id: item.id,
+                name: item.name,
+                title: item.title,
+                duration: item.duration,
+                bitrate: appSettings.bitrate,
+                mp3Size: item.mp3Blob ? item.mp3Blob.size : 0,
+                timestamp: new Date().toLocaleString()
+            };
+            conversionHistory.unshift(entry);
+            document.getElementById('historyBadge').textContent = conversionHistory.length;
+        }
+
+        function renderHistoryTable() {
+            const tbody = document.getElementById('historyTableBody');
+            const emptyState = document.getElementById('historyEmpty');
+            const query = document.getElementById('historySearch').value.toLowerCase();
+
+            const filtered = conversionHistory.filter(h => h.name.toLowerCase().includes(query) || h.title.toLowerCase().includes(query));
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+            tbody.innerHTML = filtered.map(item => `
+                <tr class="hover:bg-slate-800/40 transition-colors">
+                    <td class="py-3 px-4 font-semibold text-slate-200">
+                        <i class="fa-solid fa-file-audio text-brand-500 mr-2"></i>${escapeHtml(item.title || item.name)}
+                    </td>
+                    <td class="py-3 px-4">${formatTime(item.duration)}</td>
+                    <td class="py-3 px-4"><span class="bg-slate-800 text-brand-400 px-2 py-0.5 rounded font-mono">${item.bitrate} kbps</span></td>
+                    <td class="py-3 px-4">${(item.mp3Size / (1024 * 1024)).toFixed(2)} MB</td>
+                    <td class="py-3 px-4 text-slate-400 text-[11px]">${item.timestamp}</td>
+                    <td class="py-3 px-4 text-right">
+                        <button onclick="downloadFromHistory('${item.id}')" class="px-2.5 py-1 bg-brand-600 hover:bg-brand-500 text-white rounded-lg text-[11px] font-bold">
+                            <i class="fa-solid fa-download"></i> Save
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        document.getElementById('historySearch').addEventListener('input', renderHistoryTable);
+
+        document.getElementById('clearHistoryBtn').addEventListener('click', () => {
+            conversionHistory.length = 0;
+            document.getElementById('historyBadge').textContent = '0';
+            renderHistoryTable();
+            showToast('History log cleared', 'info');
+        });
+
+        function downloadFromHistory(id) {
+            const item = fileState.find(f => f.id === id);
+            if (item && item.mp3Blob) {
+                downloadSingleMp3(id);
+            } else {
+                showToast('Audio blob no longer cached in memory', 'warning');
+            }
+        }
+
+        function previewConvertedAudio(id) {
+            const item = fileState.find(f => f.id === id);
+            if (!item || !item.mp3Blob) return;
+
+            const url = URL.createObjectURL(item.mp3Blob);
+            audioElement.src = url;
+            playerDock.classList.remove('hidden');
+            playerTitle.textContent = item.title || item.name;
+            playerFileName.textContent = `${item.name} (${(item.mp3Blob.size / 1024).toFixed(0)} KB)`;
+
+            audioElement.play();
+            playerPlayBtn.innerHTML = '<i class="fa-solid fa-pause text-sm"></i>';
+
+            setupVisualizer();
+            playerDock.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
+
+        playerPlayBtn.addEventListener('click', () => {
+            if (audioElement.paused) {
+                audioElement.play();
+                playerPlayBtn.innerHTML = '<i class="fa-solid fa-pause text-sm"></i>';
+            } else {
+                audioElement.pause();
+                playerPlayBtn.innerHTML = '<i class="fa-solid fa-play text-sm"></i>';
+            }
+        });
+
+        playerStopBtn.addEventListener('click', () => {
+            audioElement.pause();
+            audioElement.currentTime = 0;
+            playerPlayBtn.innerHTML = '<i class="fa-solid fa-play text-sm"></i>';
+        });
+
+        audioElement.addEventListener('timeupdate', () => {
+            if (audioElement.duration) {
+                playerSeek.value = (audioElement.currentTime / audioElement.duration) * 100;
+                playerTimer.textContent = `${formatTime(audioElement.currentTime)} / ${formatTime(audioElement.duration)}`;
+            }
+        });
+
+        playerSeek.addEventListener('input', (e) => {
+            if (audioElement.duration) {
+                audioElement.currentTime = (e.target.value / 100) * audioElement.duration;
+            }
+        });
+
+        playerVolume.addEventListener('input', (e) => {
+            audioElement.volume = e.target.value;
+        });
+
+        function setupVisualizer() {
+            if (visualizerAnalyser) return;
+
+            try {
+                const ctx = getAudioContext();
+                const source = ctx.createMediaElementSource(audioElement);
+                visualizerAnalyser = ctx.createAnalyser();
+                visualizerAnalyser.fftSize = 64;
+
+                source.connect(visualizerAnalyser);
+                visualizerAnalyser.connect(ctx.destination);
+
+                drawVisualizer();
+            } catch (err) {}
+        }
+
+        function drawVisualizer() {
+            const canvas = visualizerCanvas;
+            const canvasCtx = canvas.getContext('2d');
+            canvas.width = canvas.clientWidth;
+            canvas.height = canvas.clientHeight;
+
+            if (!visualizerAnalyser) return;
+
+            const bufferLength = visualizerAnalyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+
+            function renderFrame() {
+                requestAnimationFrame(renderFrame);
+                visualizerAnalyser.getByteFrequencyData(dataArray);
+
+                canvasCtx.fillStyle = 'rgb(2, 6, 23)';
+                canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+                const barWidth = (canvas.width / bufferLength) * 1.8;
+                let x = 0;
+
+                for (let i = 0; i < bufferLength; i++) {
+                    const barHeight = (dataArray[i] / 255) * canvas.height;
+                    const gradient = canvasCtx.createLinearGradient(0, canvas.height, 0, 0);
+                    gradient.addColorStop(0, '#22c55e');
+                    gradient.addColorStop(1, '#6366f1');
+
+                    canvasCtx.fillStyle = gradient;
+                    canvasCtx.fillRect(x, canvas.height - barHeight, barWidth - 2, barHeight);
+                    x += barWidth;
+                }
+            }
+
+            renderFrame();
+        }
+
+        // Helper Utilities
+        function downloadSingleMp3(id) {
+            const item = fileState.find(f => f.id === id);
+            if (!item || !item.mp3Blob) return;
+
+            const cleanName = item.title.trim() ? `${item.title.trim()}.mp3` : item.name.replace(/\.[^/.]+$/, "") + '.mp3';
+            const link = document.createElement('a');
+            const blobUrl = URL.createObjectURL(item.mp3Blob);
+            link.href = blobUrl;
+            link.download = cleanName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            // Delay blob URL revocation so browser completes download safely
+            setTimeout(() => {
+                URL.revokeObjectURL(blobUrl);
+            }, 10000);
+
+            showToast(`Downloading ${cleanName}`, 'success');
+        }
+
+        function checkZipButtonState() {
+            const doneFiles = fileState.filter(f => f.status === 'done' && f.mp3Blob);
+            if (doneFiles.length > 0) {
+                downloadZipBtn.disabled = false;
+                downloadZipBtn.className = "px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-brand-400 border border-brand-500/30 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md";
+            } else {
+                downloadZipBtn.disabled = true;
+                downloadZipBtn.className = "px-4 py-1.5 bg-slate-800 text-slate-500 border border-slate-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-not-allowed";
+            }
+        }
+
+        document.getElementById('saveSettingsBtn').addEventListener('click', () => {
+            saveCurrentSettings();
+            showToast('Settings saved successfully!', 'success');
+        });
+
+        document.getElementById('resetSettingsBtn').addEventListener('click', () => {
+            localStorage.removeItem('roko_mp3_settings');
+            appSettings.bitrate = '192';
+            appSettings.sampleRate = '44100';
+            appSettings.channels = 'stereo';
+            appSettings.volume = 100;
+            appSettings.autoDownload = false;
+            appSettings.autoStart = false;
+            loadSettings();
+            showToast('Settings reset to defaults', 'info');
+        });
+
+        downloadZipBtn.addEventListener('click', async () => {
+            const doneFiles = fileState.filter(f => f.status === 'done' && f.mp3Blob);
+            if (doneFiles.length === 0) return;
+
+            const zip = new JSZip();
+            doneFiles.forEach(f => {
+                const cleanName = f.title.trim() ? `${f.title.trim()}.mp3` : f.name.replace(/\.[^/.]+$/, "") + '.mp3';
+                zip.file(cleanName, f.mp3Blob);
+            });
+
+            try {
+                showToast('Generating ZIP file...', 'info');
+                const content = await zip.generateAsync({ type: 'blob' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(content);
+                link.download = 'roko_mp3_converted_files.zip';
+                link.click();
+                URL.revokeObjectURL(link.href);
+                showToast('ZIP download started!', 'success');
+            } catch (err) {
+                console.error('ZIP generation error:', err);
+                showToast('Failed to create ZIP', 'error');
+            }
+        });
+
+        function audioBufferToWavBlob(audioBuffer, startSample, endSample) {
+            const numChannels = audioBuffer.numberOfChannels;
+            const sampleRate = audioBuffer.sampleRate;
+            const length = (endSample - startSample) * numChannels * 2;
+            const buffer = new ArrayBuffer(44 + length);
+            const view = new DataView(buffer);
+
+            const writeString = (v, offset, str) => {
+                for (let i = 0; i < str.length; i++) {
+                    v.setUint8(offset + i, str.charCodeAt(i));
                 }
             };
 
-            const handleEnd = (e) => {
-                e.preventDefault();
-                if (keyName === 'space') {
-                    isShieldActive = false;
-                    updateShieldUI();
-                } else {
-                    keys[keyName] = false;
+            writeString(view, 0, 'RIFF');
+            view.setUint32(4, 36 + length, true);
+            writeString(view, 8, 'WAVE');
+            writeString(view, 12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true);
+            view.setUint16(22, numChannels, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * numChannels * 2, true);
+            view.setUint16(32, numChannels * 2, true);
+            view.setUint16(34, 16, true);
+            writeString(view, 36, 'data');
+            view.setUint32(40, length, true);
+
+            let offset = 44;
+            for (let i = startSample; i < endSample; i++) {
+                for (let channel = 0; channel < numChannels; channel++) {
+                    let sample = audioBuffer.getChannelData(channel)[i];
+                    sample = Math.max(-1, Math.min(1, sample));
+                    view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+                    offset += 2;
                 }
-            };
+            }
 
-            btn.addEventListener('touchstart', handleStart, { passive: false });
-            btn.addEventListener('touchend', handleEnd, { passive: false });
-            btn.addEventListener('mousedown', handleStart);
-            btn.addEventListener('mouseup', handleEnd);
-            btn.addEventListener('mouseleave', handleEnd);
+            return new Blob([buffer], { type: 'audio/wav' });
         }
 
-        bindTouchControl('btn-left', 'a');
-        bindTouchControl('btn-right', 'd');
-        bindTouchControl('btn-accel', 'w');
-        bindTouchControl('btn-brake', 's');
-        bindTouchControl('btn-shield', 'space');
+        convertAllBtn.addEventListener('click', async () => {
+            const pending = fileState.filter(f => f.status !== 'done' && f.status !== 'processing');
+            if (pending.length === 0) {
+                showToast('No pending files to convert', 'info');
+                return;
+            }
 
-        let speed = 0;
-        let steering = 0;
-        const maxSpeed = 0.65;
-        const accel = 0.015;
-        const friction = 0.965;
+            for (const item of pending) {
+                await startSingleConversion(item.id);
+            }
+        });
 
-        function updateCar(dt) {
-            if (!car) return;
+        clearAllBtn.addEventListener('click', () => {
+            fileState.length = 0;
+            renderFileList();
+            showToast('Queue cleared', 'info');
+        });
 
-            const frameFactor = Math.min(dt * 60, 2);
-
-            if (keys['w'] || keys['arrowup']) speed += accel * frameFactor;
-            if (keys['s'] || keys['arrowdown']) speed -= accel * 0.75 * frameFactor;
-
-            if (keys['a'] || keys['arrowleft']) steering = 0.038 * Math.min(Math.abs(speed) * 2.5, 1);
-            else if (keys['d'] || keys['arrowright']) steering = -0.038 * Math.min(Math.abs(speed) * 2.5, 1);
-            else steering *= 0.82;
-
-            speed = THREE.MathUtils.clamp(speed, -maxSpeed * 0.5, maxSpeed);
-            speed *= Math.pow(friction, frameFactor);
-
-            car.rotation.y += steering * Math.sign(speed || 1) * frameFactor;
-            const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(car.quaternion);
-            car.position.addScaledVector(dir, speed * frameFactor);
-
-            const currentGroundHeight = getTerrainHeight(car.position.x, car.position.z);
-            car.position.y = currentGroundHeight;
-
-            const kmh = Math.abs(speed * 120).toFixed(0);
-            document.getElementById('speedometer').textContent = kmh + " km/h";
-
-            // Rotate current checkpoint ring
-            if (checkpointMesh) checkpointMesh.children[0].rotation.z += 0.025;
+        function updateProgressUI(id, percent, text) {
+            const item = fileState.find(f => f.id === id);
+            if (item) item.progress = percent;
+            
+            const bar = document.getElementById(`${id}_progressBar`);
+            const pText = document.getElementById(`${id}_progressPercent`);
+            const sText = document.getElementById(`${id}_progressStage`);
+            
+            if (bar) bar.style.width = `${percent}%`;
+            if (pText) pText.textContent = `${percent}%`;
+            if (sText) sText.textContent = text;
         }
 
-        // Camera follow
-        const camOffset = new THREE.Vector3(0, 7.5, 14);
-        function updateCamera() {
-            if (!car) return;
-            const target = car.position.clone().add(camOffset.clone().applyQuaternion(car.quaternion));
-            camera.position.lerp(target, 0.09);
-            camera.lookAt(car.position.x, car.position.y + 1.2, car.position.z);
+        function updateFileCardUI(id) {
+            const item = fileState.find(f => f.id === id);
+            if (!item) return;
+            const statusText = document.getElementById(`${id}_statusText`);
+            if (statusText) {
+                statusText.className = `font-semibold ${getStatusColor(item.status)}`;
+                statusText.textContent = item.status.toUpperCase();
+            }
         }
 
-        let isPlaying = false;
-        let lastTime = 0;
-
-        function animate(time) {
-            if (!isPlaying) return;
-            requestAnimationFrame(animate);
-
-            const dt = (time - lastTime) / 1000 || 0.016;
-            lastTime = time;
-
-            updateCar(dt);
-            updateEnemyCars(dt);
-            checkCheckpointCollision();
-            updateCamera();
-            renderer.render(scene, camera);
+        function getStatusColor(status) {
+            switch(status) {
+                case 'done': return 'text-emerald-400';
+                case 'processing': return 'text-amber-400';
+                case 'error': return 'text-red-400';
+                default: return 'text-slate-400';
+            }
         }
 
-        const hitOverlay = document.getElementById('hit-overlay');
-
-        function triggerGameOver() {
-            isPlaying = false;
-            hitOverlay.style.opacity = '1';
-            setTimeout(() => { hitOverlay.style.opacity = '0'; }, 300);
-
-            document.getElementById('game-over-screen').style.display = 'flex';
-            hideHUD();
+        function removeFile(id) {
+            const idx = fileState.findIndex(f => f.id === id);
+            if (idx !== -1) {
+                fileState.splice(idx, 1);
+                renderFileList();
+            }
         }
 
-        function triggerWinGame() {
-            isPlaying = false;
-            document.getElementById('win-screen').style.display = 'flex';
-            hideHUD();
+        function updateTrim(id, type, val) {
+            const item = fileState.find(f => f.id === id);
+            if (item) {
+                const num = parseFloat(val) || 0;
+                if (type === 'start') item.trimStart = num;
+                if (type === 'end') item.trimEnd = num;
+            }
         }
 
-        function hideHUD() {
-            document.getElementById('ui').style.display = 'none';
-            document.getElementById('speedometer').style.display = 'none';
-            document.getElementById('checkpoint-tracker').style.display = 'none';
-            document.getElementById('enemy-warning').style.display = 'none';
-            document.getElementById('mobile-controls').style.display = 'none';
-            document.getElementById('shield-status').style.display = 'none';
+        function updateTag(id, field, val) {
+            const item = fileState.find(f => f.id === id);
+            if (item) item[field] = val;
         }
 
-        function resetGame() {
-            currentCheckpointIdx = 0;
-            speed = 0;
-            isShieldActive = false;
-            updateShieldUI();
-
-            car.position.set(0, getTerrainHeight(0, 0), 0);
-            car.rotation.set(0, 0, 0);
-
-            spawnEnemyCars();
-            createCheckpointMesh(checkpointLocations[0].x, checkpointLocations[0].z);
-            updateCheckpointUI();
-
-            document.getElementById('start-screen').style.display = 'none';
-            document.getElementById('game-over-screen').style.display = 'none';
-            document.getElementById('win-screen').style.display = 'none';
-
-            document.getElementById('ui').style.display = 'block';
-            document.getElementById('speedometer').style.display = 'block';
-            document.getElementById('checkpoint-tracker').style.display = 'block';
-            document.getElementById('enemy-warning').style.display = 'block';
-            document.getElementById('mobile-controls').style.display = 'flex';
-
-            isPlaying = true;
-            lastTime = performance.now();
-            requestAnimationFrame(animate);
+        function toggleOptionsModal(id) {
+            const panel = document.getElementById(`${id}_optionsPanel`);
+            if (panel) panel.classList.toggle('hidden');
         }
 
-        document.getElementById('loading').style.display = 'none';
+        function escapeHtml(str) {
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
 
-        document.getElementById('play-btn').addEventListener('click', resetGame);
-        document.getElementById('restart-btn').addEventListener('click', resetGame);
-        document.getElementById('win-restart-btn').addEventListener('click', resetGame);
+        function formatTime(secs) {
+            if (!secs || isNaN(secs)) return '00:00';
+            const m = Math.floor(secs / 60);
+            const s = Math.floor(secs % 60);
+            return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        }
 
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl text-xs font-semibold border transition-all duration-300 transform translate-y-2 opacity-0 bg-slate-900 border-slate-700 text-slate-100`;
+
+            let icon = '<i class="fa-solid fa-circle-info text-brand-400 text-base"></i>';
+            if (type === 'success') icon = '<i class="fa-solid fa-circle-check text-emerald-400 text-base"></i>';
+            if (type === 'warning') icon = '<i class="fa-solid fa-triangle-exclamation text-amber-400 text-base"></i>';
+            if (type === 'error') icon = '<i class="fa-solid fa-circle-xmark text-red-400 text-base"></i>';
+
+            toast.innerHTML = `${icon} <span>${escapeHtml(message)}</span>`;
+            container.appendChild(toast);
+
+            setTimeout(() => toast.classList.remove('translate-y-2', 'opacity-0'), 10);
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        // Initialize Settings on load
+        window.addEventListener('DOMContentLoaded', () => {
+            loadSettings();
         });
     </script>
 </body>
