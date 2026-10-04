@@ -1,0 +1,25 @@
+{
+  "background_color": "#ffffff",
+  "dir": "ltr",
+  "display": "standalone",
+  "name": "ROKO MP3 CONVERTER",
+  "orientation": "any",
+  "scope": "/",
+  "short_name": "ROKO MP3",
+  "start_url": "/",
+  "theme_color": "#ffffff",
+  "shortcuts": [
+    {
+      "name": "Roko MP3",
+      "url": null,
+      "description": null
+    }
+  ],
+  "categories": [
+    "utilities"
+  ],
+  "edge_side_panel": {
+    "preferred_width": 0
+  },
+  "lang": "en"
+}
