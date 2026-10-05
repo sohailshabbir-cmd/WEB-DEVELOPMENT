@@ -1,0 +1,1246 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Roko MP3 Converter</title>
+    
+    <!-- PWA Manifest & Meta Tags -->
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <!-- Service Worker Script -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./sw.js').catch(() => {
+            const swCode = `
+              self.addEventListener('install', e => self.skipWaiting());
+              self.addEventListener('activate', e => self.clients.claim());
+              self.addEventListener('fetch', e => e.respondWith(fetch(e.request)));
+            `;
+            const blob = new Blob([swCode], { type: 'application/javascript' });
+            navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(() => {});
+          });
+        });
+      }
+    </script>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- LAME MP3 Encoder CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js"></script>
+    <!-- JSZip CDN for batch zip download -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            500: '#22c55e',
+                            600: '#16a34a',
+                            700: '#15803d',
+                            900: '#14532d',
+                        },
+                        accent: {
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Mobile touch tap highlight reset */
+        * {
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+        .gradient-text {
+            background: linear-gradient(135deg, #22c55e 0%, #6366f1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .drop-glow {
+            box-shadow: 0 0 25px -5px rgba(34, 197, 94, 0.25);
+        }
+        .nav-tab-active {
+            background-color: rgba(34, 197, 94, 0.15);
+            color: #22c55e;
+            border-color: rgba(34, 197, 94, 0.4);
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans min-h-screen flex flex-col transition-colors duration-300 overflow-x-hidden selection:bg-brand-500 selection:text-slate-950">
+
+    <!-- Header -->
+    <header class="border-b border-slate-800/80 bg-slate-900/95 backdrop-blur-md sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2">
+            
+            <!-- Logo & Brand -->
+            <div class="flex items-center space-x-2 sm:space-x-3 cursor-pointer select-none active:scale-95 transition-transform flex-shrink-0" onclick="switchTab('converter')">
+                <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-brand-500 to-accent-600 flex items-center justify-center shadow-lg shadow-brand-500/20">
+                    <i class="fa-solid font-bold fa-compact-disc text-white text-lg sm:text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-base sm:text-xl font-extrabold tracking-tight flex items-center gap-1">
+                        ROKO <span class="gradient-text font-black">MP3</span>
+                    </h1>
+                    <p class="hidden xs:block text-[9px] sm:text-[10px] text-slate-400 -mt-1 font-medium tracking-wider">AUDIO CONVERTER</p>
+                </div>
+            </div>
+
+            <!-- Header Navigation Tabs (Compact Icon-Only) -->
+            <nav class="flex items-center space-x-1 sm:space-x-2 bg-slate-950/90 p-1 sm:p-1.5 rounded-xl border border-slate-800">
+                <button id="navBtnConverter" onclick="switchTab('converter')" title="Converter" class="nav-tab-active w-9 h-9 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center transition-all border border-transparent active:scale-95">
+                    <i class="fa-solid fa-arrows-rotate text-sm sm:text-base"></i>
+                </button>
+                <button id="navBtnHistory" onclick="switchTab('history')" title="History" class="relative w-9 h-9 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold text-slate-400 hover:text-slate-200 hover:bg-slate-800 flex items-center justify-center transition-all border border-transparent active:scale-95">
+                    <i class="fa-solid fa-clock-rotate-left text-sm sm:text-base"></i>
+                    <span id="historyBadge" class="absolute -top-1 -right-1 bg-brand-500 text-slate-950 px-1.5 py-0.2 rounded-full text-[9px] font-extrabold shadow-sm">0</span>
+                </button>
+                <button id="navBtnSettings" onclick="switchTab('settings')" title="Settings" class="w-9 h-9 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold text-slate-400 hover:text-slate-200 hover:bg-slate-800 flex items-center justify-center transition-all border border-transparent active:scale-95">
+                    <i class="fa-solid fa-gear text-sm sm:text-base"></i>
+                </button>
+            </nav>
+
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-3.5 sm:px-6 lg:px-8 py-5 sm:py-8 pb-12">
+
+        <!-- VIEW 1: CONVERTER PAGE -->
+        <div id="viewConverter" class="space-y-6 sm:space-y-8">
+            <section class="text-center space-y-1.5 sm:space-y-2 max-w-2xl mx-auto px-2">
+                <h2 class="text-2xl sm:text-4xl font-extrabold tracking-tight text-slate-100">
+                    Extract <span class="gradient-text">MP3 Audio</span> from MP4
+                </h2>
+                <p class="text-slate-400 text-xs sm:text-sm leading-relaxed">
+                    100% Client-Side Processing. Files stay safe on your mobile device.
+                </p>
+            </section>
+
+            <!-- Upload Dropzone -->
+            <section class="max-w-4xl mx-auto">
+                <div id="dropzone" class="relative group cursor-pointer border-2 border-dashed border-slate-700 active:border-brand-500 hover:border-brand-500 rounded-2xl sm:rounded-3xl p-6 sm:p-12 text-center bg-slate-900/40 hover:bg-slate-900/80 active:bg-slate-900/90 transition-all duration-300 drop-glow">
+                    <input type="file" id="fileInput" multiple accept="video/mp4,video/x-m4v,video/*,audio/*" class="hidden">
+                    
+                    <div class="flex flex-col items-center justify-center space-y-3.5 sm:space-y-4">
+                        <div class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-slate-800/90 border border-slate-700 flex items-center justify-center group-hover:scale-110 active:scale-95 group-hover:border-brand-500 group-hover:bg-brand-500/10 transition-all duration-300">
+                            <i class="fa-solid fa-cloud-arrow-up text-xl sm:text-2xl text-brand-500"></i>
+                        </div>
+                        
+                        <div class="space-y-1">
+                            <p class="text-sm sm:text-lg font-semibold text-slate-200">
+                                Tap to Select or Drop Media Files
+                            </p>
+                            <p class="text-xs sm:text-sm text-slate-400">
+                                Choose video files from <span class="text-brand-500 font-medium underline">your phone or computer</span>
+                            </p>
+                        </div>
+
+                        <div class="flex flex-wrap justify-center gap-1.5 pt-1 text-[10px] sm:text-[11px] text-slate-500">
+                            <span class="bg-slate-800 px-2 py-0.5 rounded-md border border-slate-700/50">MP4</span>
+                            <span class="bg-slate-800 px-2 py-0.5 rounded-md border border-slate-700/50">MOV</span>
+                            <span class="bg-slate-800 px-2 py-0.5 rounded-md border border-slate-700/50">MKV</span>
+                            <span class="bg-slate-800 px-2 py-0.5 rounded-md border border-slate-700/50">WEBM</span>
+                            <span class="bg-slate-800 px-2 py-0.5 rounded-md border border-slate-700/50">M4A</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Converter Queue Section -->
+            <section id="queueSection" class="hidden max-w-4xl mx-auto space-y-4">
+                <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-slate-900/90 border border-slate-800 p-3.5 sm:p-4 rounded-2xl shadow-lg">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-xl bg-brand-500/20 text-brand-500 flex items-center justify-center font-bold text-xs sm:text-sm">
+                            <span id="queueCount">0</span>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-slate-200 text-xs sm:text-sm">Active File Queue</h3>
+                            <p class="text-[11px] sm:text-xs text-slate-400" id="queueTotalSize">0 MB total</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-3 sm:flex items-center gap-2 w-full sm:w-auto">
+                        <button id="clearAllBtn" class="px-3 py-2 bg-slate-800 active:scale-95 hover:bg-red-500/10 text-slate-300 hover:text-red-400 border border-slate-700 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-1">
+                            <i class="fa-solid fa-trash-can"></i> <span class="hidden sm:inline">Clear</span>
+                        </button>
+                        <button id="convertAllBtn" class="px-3 py-2 bg-gradient-to-r from-brand-600 to-emerald-500 active:scale-95 hover:from-brand-500 hover:to-emerald-400 text-white font-bold rounded-xl text-xs shadow-lg shadow-brand-500/20 transition-all flex items-center justify-center gap-1">
+                            <i class="fa-solid fa-bolt"></i> Convert
+                        </button>
+                        <button id="downloadZipBtn" disabled class="px-3 py-2 bg-slate-800 text-slate-500 border border-slate-700 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-not-allowed">
+                            <i class="fa-solid fa-file-zipper"></i> ZIP
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Queue Cards List -->
+                <div id="fileList" class="space-y-3">
+                    <!-- Dynamically populated cards -->
+                </div>
+            </section>
+        </div>
+
+        <!-- VIEW 2: SETTINGS PAGE -->
+        <div id="viewSettings" class="hidden max-w-4xl mx-auto space-y-5">
+            <div class="border-b border-slate-800 pb-3.5">
+                <h2 class="text-xl sm:text-2xl font-bold text-slate-100 flex items-center gap-2">
+                    <i class="fa-solid fa-sliders text-brand-500"></i> Converter Preferences
+                </h2>
+                <p class="text-xs text-slate-400 mt-1">Configure bitrate, audio sample rates, and auto behaviors.</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                
+                <!-- Audio Bitrate & Quality -->
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-4">
+                    <h3 class="text-xs sm:text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                        <i class="fa-solid fa-gauge-high text-brand-500"></i> Audio Encoding Quality
+                    </h3>
+                    
+                    <div class="space-y-3.5 text-xs">
+                        <div>
+                            <label class="block font-semibold text-slate-300 mb-1.5">Target MP3 Bitrate</label>
+                            <select id="settingBitrate" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-200 focus:border-brand-500 focus:outline-none min-h-[44px]">
+                                <option value="320">320 kbps (Extreme HD Quality)</option>
+                                <option value="256">256 kbps (High Quality)</option>
+                                <option value="192" selected>192 kbps (Standard Recommended)</option>
+                                <option value="128">128 kbps (Compact File Size)</option>
+                                <option value="64">64 kbps (Voice Recording)</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block font-semibold text-slate-300 mb-1.5">Sample Rate</label>
+                            <select id="settingSampleRate" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-200 focus:border-brand-500 focus:outline-none min-h-[44px]">
+                                <option value="44100" selected>44.1 kHz (CD Standard)</option>
+                                <option value="48000">48.0 kHz (Studio Quality)</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block font-semibold text-slate-300 mb-1.5">Audio Channels</label>
+                            <select id="settingChannels" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-200 focus:border-brand-500 focus:outline-none min-h-[44px]">
+                                <option value="stereo" selected>Stereo (2 Channels)</option>
+                                <option value="mono">Mono (1 Channel)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Volume & Output Controls -->
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-4">
+                    <h3 class="text-xs sm:text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                        <i class="fa-solid fa-volume-high text-accent-500"></i> Volume & Automation
+                    </h3>
+
+                    <div class="space-y-4 text-xs">
+                        <div>
+                            <div class="flex justify-between font-semibold text-slate-300 mb-2">
+                                <span>Default Volume Amplification</span>
+                                <span id="settingVolumeVal" class="text-brand-500 font-bold">100%</span>
+                            </div>
+                            <input type="range" id="settingVolume" min="50" max="200" value="100" class="w-full accent-brand-500 h-2 bg-slate-950 rounded-lg cursor-pointer">
+                        </div>
+
+                        <div class="pt-2 border-t border-slate-800/80 space-y-3">
+                            <label class="flex items-center justify-between cursor-pointer py-1">
+                                <span class="text-slate-300 font-medium">Auto Download MP3 when finished</span>
+                                <input type="checkbox" id="settingAutoDownload" class="w-5 h-5 accent-brand-500 rounded cursor-pointer">
+                            </label>
+
+                            <label class="flex items-center justify-between cursor-pointer py-1">
+                                <span class="text-slate-300 font-medium">Auto-start conversion on upload</span>
+                                <input type="checkbox" id="settingAutoStart" class="w-5 h-5 accent-brand-500 rounded cursor-pointer">
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Save & Action Footer -->
+            <div class="flex items-center justify-between pt-3 border-t border-slate-800 gap-2">
+                <button id="resetSettingsBtn" class="px-4 py-2.5 bg-slate-800 active:scale-95 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition-all">
+                    Reset
+                </button>
+                <button id="saveSettingsBtn" class="px-5 py-2.5 bg-brand-600 active:scale-95 hover:bg-brand-500 text-white rounded-xl text-xs font-bold shadow-lg transition-all flex items-center gap-2">
+                    <i class="fa-solid fa-floppy-disk"></i> Save Settings
+                </button>
+            </div>
+        </div>
+
+        <!-- VIEW 3: HISTORY PAGE -->
+        <div id="viewHistory" class="hidden max-w-5xl mx-auto space-y-4 sm:space-y-6">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                <div>
+                    <h2 class="text-xl sm:text-2xl font-bold text-slate-100 flex items-center gap-2">
+                        <i class="fa-solid fa-clock-rotate-left text-brand-500"></i> Conversion Log
+                    </h2>
+                    <p class="text-xs text-slate-400 mt-0.5">Files converted during current session.</p>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <button id="clearHistoryBtn" class="px-3.5 py-2 bg-slate-900 active:scale-95 hover:bg-red-500/10 text-slate-300 hover:text-red-400 border border-slate-800 rounded-xl text-xs font-semibold transition-all">
+                        <i class="fa-solid fa-trash-can mr-1"></i> Clear Log
+                    </button>
+                </div>
+            </div>
+
+            <!-- Search Bar -->
+            <div class="flex items-center bg-slate-900 border border-slate-800 rounded-2xl px-3.5 py-2.5">
+                <i class="fa-solid fa-magnifying-glass text-slate-500 text-xs mr-2.5"></i>
+                <input type="text" id="historySearch" placeholder="Search title or filename..." class="w-full bg-transparent text-xs text-slate-200 focus:outline-none">
+            </div>
+
+            <!-- Mobile Cards / Desktop Table Container -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+                <!-- Desktop Table View -->
+                <div class="hidden sm:block overflow-x-auto">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-950 text-slate-400 font-semibold border-b border-slate-800 uppercase tracking-wider text-[10px]">
+                            <tr>
+                                <th class="py-3 px-4">File Name</th>
+                                <th class="py-3 px-4">Duration</th>
+                                <th class="py-3 px-4">Bitrate</th>
+                                <th class="py-3 px-4">Size</th>
+                                <th class="py-3 px-4">Date</th>
+                                <th class="py-3 px-4 text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyTableBody" class="divide-y divide-slate-800/60 text-slate-300">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Mobile Card List View -->
+                <div id="historyMobileList" class="sm:hidden divide-y divide-slate-800/80">
+                    <!-- Populated dynamically for mobile screens -->
+                </div>
+
+                <!-- Empty state placeholder -->
+                <div id="historyEmpty" class="py-12 text-center text-slate-500 space-y-2">
+                    <i class="fa-solid fa-folder-open text-3xl"></i>
+                    <p class="text-xs font-semibold">No conversion history recorded yet.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Docked Audio Player Preview -->
+        <section id="playerDock" class="hidden mt-6 max-w-4xl mx-auto bg-slate-900 border border-slate-800 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-2xl relative overflow-hidden">
+            <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-brand-500 via-accent-500 to-emerald-400"></div>
+            
+            <div class="flex flex-col md:flex-row items-center gap-3.5 sm:gap-4">
+                <!-- Canvas Visualizer -->
+                <div class="w-full md:w-1/3 bg-slate-950 rounded-xl p-2 border border-slate-800 flex flex-col items-center">
+                    <canvas id="visualizerCanvas" class="w-full h-16 sm:h-20 rounded-lg bg-slate-950"></canvas>
+                    <p class="text-[10px] text-slate-500 mt-1 font-mono truncate max-w-full" id="playerFileName">Audio Preview</p>
+                </div>
+
+                <!-- Player Controls -->
+                <div class="w-full md:w-2/3 space-y-2">
+                    <div class="flex items-center justify-between gap-2">
+                        <div class="min-w-0">
+                            <span class="text-[9px] sm:text-[10px] font-bold text-brand-500 uppercase tracking-wider">Audio Player</span>
+                            <h4 class="text-xs sm:text-sm font-bold text-slate-200 truncate" id="playerTitle">Selected Audio</h4>
+                        </div>
+                        <span id="playerTimer" class="font-mono text-[11px] sm:text-xs text-slate-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-800 flex-shrink-0">00:00 / 00:00</span>
+                    </div>
+
+                    <input type="range" id="playerSeek" value="0" min="0" max="100" class="w-full accent-brand-500 cursor-pointer h-1.5 bg-slate-800 rounded-lg">
+
+                    <div class="flex items-center justify-between pt-1">
+                        <div class="flex items-center gap-2">
+                            <button id="playerPlayBtn" class="w-9 h-9 rounded-xl bg-brand-500 active:scale-95 hover:bg-brand-400 text-slate-950 flex items-center justify-center font-bold transition-all">
+                                <i class="fa-solid fa-play text-xs sm:text-sm"></i>
+                            </button>
+                            <button id="playerStopBtn" class="w-8 h-8 rounded-xl bg-slate-800 active:scale-95 hover:bg-slate-700 text-slate-300 flex items-center justify-center text-xs transition-all">
+                                <i class="fa-solid fa-stop"></i>
+                            </button>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-volume-high text-xs text-slate-400"></i>
+                            <input type="range" id="playerVolume" min="0" max="1" step="0.05" value="1" class="w-16 sm:w-20 accent-brand-500 h-1.5">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <audio id="audioElement" class="hidden"></audio>
+        </section>
+
+    </main>
+
+    <!-- Toast Notifications -->
+    <div id="toastContainer" class="fixed bottom-5 right-3 left-3 sm:left-auto z-50 space-y-2 pointer-events-none"></div>
+
+    <script>
+        // Global Application State
+        const fileState = [];
+        const conversionHistory = [];
+        let audioCtx = null;
+        let visualizerAnalyser = null;
+
+        // Audio Context initialization helper
+        function getAudioContext() {
+            if (!audioCtx) {
+                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContextClass();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            return audioCtx;
+        }
+
+        // Settings State
+        const appSettings = {
+            bitrate: '192',
+            sampleRate: '44100',
+            channels: 'stereo',
+            volume: 100,
+            autoDownload: false,
+            autoStart: false
+        };
+
+        // DOM Elements
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('fileInput');
+        const queueSection = document.getElementById('queueSection');
+        const fileList = document.getElementById('fileList');
+        const queueCount = document.getElementById('queueCount');
+        const queueTotalSize = document.getElementById('queueTotalSize');
+        const convertAllBtn = document.getElementById('convertAllBtn');
+        const downloadZipBtn = document.getElementById('downloadZipBtn');
+        const clearAllBtn = document.getElementById('clearAllBtn');
+
+        // Player DOM
+        const playerDock = document.getElementById('playerDock');
+        const audioElement = document.getElementById('audioElement');
+        const playerPlayBtn = document.getElementById('playerPlayBtn');
+        const playerStopBtn = document.getElementById('playerStopBtn');
+        const playerSeek = document.getElementById('playerSeek');
+        const playerVolume = document.getElementById('playerVolume');
+        const playerTitle = document.getElementById('playerTitle');
+        const playerFileName = document.getElementById('playerFileName');
+        const playerTimer = document.getElementById('playerTimer');
+        const visualizerCanvas = document.getElementById('visualizerCanvas');
+
+        // Load saved settings from localStorage & bind instant change listeners
+        function loadSettings() {
+            try {
+                const saved = localStorage.getItem('roko_mp3_settings');
+                if (saved) {
+                    Object.assign(appSettings, JSON.parse(saved));
+                }
+            } catch (e) {
+                console.warn("LocalStorage inaccessible", e);
+            }
+
+            document.getElementById('settingBitrate').value = appSettings.bitrate;
+            document.getElementById('settingSampleRate').value = appSettings.sampleRate;
+            document.getElementById('settingChannels').value = appSettings.channels;
+            document.getElementById('settingVolume').value = appSettings.volume;
+            document.getElementById('settingVolumeVal').textContent = `${appSettings.volume}%`;
+            document.getElementById('settingAutoDownload').checked = !!appSettings.autoDownload;
+            document.getElementById('settingAutoStart').checked = !!appSettings.autoStart;
+
+            bindSettingsListeners();
+        }
+
+        function bindSettingsListeners() {
+            const bitrateEl = document.getElementById('settingBitrate');
+            const sampleRateEl = document.getElementById('settingSampleRate');
+            const channelsEl = document.getElementById('settingChannels');
+            const volumeEl = document.getElementById('settingVolume');
+            const autoDownloadEl = document.getElementById('settingAutoDownload');
+            const autoStartEl = document.getElementById('settingAutoStart');
+
+            bitrateEl.onchange = () => saveCurrentSettings();
+            sampleRateEl.onchange = () => saveCurrentSettings();
+            channelsEl.onchange = () => saveCurrentSettings();
+            
+            volumeEl.oninput = (e) => {
+                document.getElementById('settingVolumeVal').textContent = `${e.target.value}%`;
+                saveCurrentSettings();
+            };
+
+            autoDownloadEl.onchange = () => {
+                appSettings.autoDownload = autoDownloadEl.checked;
+                saveCurrentSettings();
+            };
+
+            autoStartEl.onchange = () => {
+                appSettings.autoStart = autoStartEl.checked;
+                saveCurrentSettings();
+            };
+        }
+
+        function saveCurrentSettings() {
+            appSettings.bitrate = document.getElementById('settingBitrate').value;
+            appSettings.sampleRate = document.getElementById('settingSampleRate').value;
+            appSettings.channels = document.getElementById('settingChannels').value;
+            appSettings.volume = parseInt(document.getElementById('settingVolume').value, 10);
+            appSettings.autoDownload = document.getElementById('settingAutoDownload').checked;
+            appSettings.autoStart = document.getElementById('settingAutoStart').checked;
+
+            try {
+                localStorage.setItem('roko_mp3_settings', JSON.stringify(appSettings));
+            } catch(e) {}
+        }
+
+        // View Navigation Switcher
+        function switchTab(tabName) {
+            const views = ['converter', 'history', 'settings'];
+            views.forEach(v => {
+                const viewEl = document.getElementById(`view${capitalize(v)}`);
+                const navBtn = document.getElementById(`navBtn${capitalize(v)}`);
+
+                if (v === tabName) {
+                    viewEl.classList.remove('hidden');
+                    if (navBtn) {
+                        navBtn.className = "nav-tab-active w-9 h-9 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center transition-all border border-transparent active:scale-95";
+                    }
+                } else {
+                    viewEl.classList.add('hidden');
+                    if (navBtn) {
+                        navBtn.className = "w-9 h-9 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl text-xs sm:text-sm font-semibold text-slate-400 hover:text-slate-200 hover:bg-slate-800 flex items-center justify-center transition-all border border-transparent active:scale-95";
+                    }
+                }
+            });
+
+            if (tabName === 'history') {
+                renderHistoryTable();
+            }
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function capitalize(str) {
+            return str.charAt(0).toUpperCase() + str.slice(1);
+        }
+
+        // Dropzone listeners
+        dropzone.addEventListener('click', () => fileInput.click());
+        dropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropzone.classList.add('border-brand-500', 'bg-brand-500/10');
+        });
+        dropzone.addEventListener('dragleave', () => {
+            dropzone.classList.remove('border-brand-500', 'bg-brand-500/10');
+        });
+        dropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('border-brand-500', 'bg-brand-500/10');
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                handleFiles(e.dataTransfer.files);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files.length > 0) {
+                handleFiles(e.target.files);
+                fileInput.value = '';
+            }
+        });
+
+        function handleFiles(files) {
+            let addedCount = 0;
+            Array.from(files).forEach(file => {
+                if (file.type.startsWith('video/') || file.type.startsWith('audio/') || file.name.match(/\.(mp4|mov|mkv|webm|avi|3gp|m4a|wav|aac)$/i)) {
+                    const fileObj = {
+                        id: 'file_' + Math.random().toString(36).substr(2, 9),
+                        file: file,
+                        name: file.name,
+                        size: file.size,
+                        duration: 0,
+                        status: 'idle',
+                        progress: 0,
+                        mp3Blob: null,
+                        audioBuffer: null,
+                        title: file.name.replace(/\.[^/.]+$/, "")
+                    };
+                    fileState.push(fileObj);
+                    addedCount++;
+                    probeFileDuration(fileObj);
+                }
+            });
+
+            if (addedCount > 0) {
+                showToast(`Added ${addedCount} file(s) to queue`, 'success');
+                renderFileList();
+
+                if (appSettings.autoStart) {
+                    setTimeout(() => {
+                        convertAllBtn.click();
+                    }, 300);
+                }
+            } else {
+                showToast('Please select valid media files', 'warning');
+            }
+        }
+
+        function probeFileDuration(fileObj) {
+            const url = URL.createObjectURL(fileObj.file);
+            const tempVid = document.createElement('video');
+            tempVid.preload = 'metadata';
+            tempVid.src = url;
+            tempVid.onloadedmetadata = () => {
+                fileObj.duration = tempVid.duration || 0;
+                URL.revokeObjectURL(url);
+                updateFileCardUI(fileObj.id);
+            };
+            tempVid.onerror = () => {
+                URL.revokeObjectURL(url);
+            };
+        }
+
+        function renderFileList() {
+            if (fileState.length === 0) {
+                queueSection.classList.add('hidden');
+                return;
+            }
+
+            queueSection.classList.remove('hidden');
+            queueCount.textContent = fileState.length;
+            const totalBytes = fileState.reduce((acc, f) => acc + f.size, 0);
+            queueTotalSize.textContent = `${(totalBytes / (1024 * 1024)).toFixed(1)} MB total`;
+
+            fileList.innerHTML = '';
+
+            fileState.forEach(item => {
+                const card = document.createElement('div');
+                card.id = item.id;
+                card.className = "bg-slate-900 border border-slate-800 rounded-2xl p-3.5 sm:p-4 shadow-lg space-y-3";
+
+                const isDone = item.status === 'done';
+                const isProcessing = item.status === 'processing';
+
+                card.innerHTML = `
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div class="flex items-center space-x-3 min-w-0">
+                            <div class="w-10 h-10 rounded-xl ${isDone ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-brand-500'} flex items-center justify-center font-bold text-lg flex-shrink-0">
+                                <i class="fa-solid ${isDone ? 'fa-circle-check text-emerald-500' : 'fa-file-video'}"></i>
+                            </div>
+                            <div class="min-w-0 flex-grow">
+                                <h4 class="font-bold text-slate-200 text-xs sm:text-sm truncate" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}.mp3</h4>
+                                <div class="flex items-center gap-2 sm:gap-3 text-[11px] text-slate-400 mt-0.5">
+                                    <span>${(item.size / (1024 * 1024)).toFixed(1)} MB</span>
+                                    <span>${formatTime(item.duration)}</span>
+                                    <span id="${item.id}_statusText" class="font-semibold ${getStatusColor(item.status)}">${item.status.toUpperCase()}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2 justify-end pt-1 sm:pt-0 border-t sm:border-0 border-slate-800/80">
+                            ${isDone ? `
+                                <button onclick="previewConvertedAudio('${item.id}')" class="px-3 py-1.5 bg-slate-800 active:scale-95 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors border border-slate-700">
+                                    <i class="fa-solid fa-play text-brand-500"></i> Play
+                                </button>
+                                <button onclick="downloadSingleMp3('${item.id}')" class="px-3.5 py-1.5 bg-brand-600 active:scale-95 hover:bg-brand-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md transition-colors">
+                                    <i class="fa-solid fa-download"></i> Save
+                                </button>
+                            ` : `
+                                <button onclick="toggleOptionsModal('${item.id}')" class="px-3 py-1.5 bg-slate-800 active:scale-95 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold flex items-center gap-1 transition-colors border border-slate-700">
+                                    <i class="fa-solid fa-pen-to-square"></i> Rename
+                                </button>
+                                <button onclick="startSingleConversion('${item.id}')" ${isProcessing ? 'disabled' : ''} class="px-3.5 py-1.5 bg-brand-600 active:scale-95 hover:bg-brand-500 disabled:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-md transition-colors">
+                                    <i class="fa-solid ${isProcessing ? 'fa-spinner fa-spin' : 'fa-bolt'}"></i> ${isProcessing ? 'Converting' : 'Convert'}
+                                </button>
+                            `}
+                            <button onclick="removeFile('${item.id}')" class="w-8 h-8 rounded-xl bg-slate-800 active:scale-95 hover:bg-red-500/20 text-slate-400 hover:text-red-400 flex items-center justify-center text-xs transition-colors border border-slate-700">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="${item.id}_progressContainer" class="${isProcessing || isDone ? 'block' : 'hidden'} space-y-1">
+                        <div class="flex justify-between text-[10px] font-mono text-slate-400">
+                            <span id="${item.id}_progressStage">Processing...</span>
+                            <span id="${item.id}_progressPercent">${item.progress}%</span>
+                        </div>
+                        <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden border border-slate-700/50">
+                            <div id="${item.id}_progressBar" class="h-full bg-gradient-to-r from-brand-500 to-accent-500 transition-all duration-200" style="width: ${item.progress}%"></div>
+                        </div>
+                    </div>
+
+                    <div id="${item.id}_optionsPanel" class="hidden pt-2.5 border-t border-slate-800">
+                        <div>
+                            <label class="block text-slate-400 text-[11px] font-semibold mb-1">Rename Output Audio</label>
+                            <input type="text" value="${escapeHtml(item.title)}" onchange="updateTag('${item.id}', 'title', this.value)" placeholder="Enter new filename..." class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-slate-200 focus:border-brand-500 focus:outline-none">
+                        </div>
+                    </div>
+                `;
+
+                fileList.appendChild(card);
+            });
+
+            checkZipButtonState();
+        }
+
+        async function startSingleConversion(id) {
+            const item = fileState.find(f => f.id === id);
+            if (!item || item.status === 'processing') return;
+
+            item.status = 'processing';
+            item.progress = 5;
+            updateFileCardUI(id);
+
+            try {
+                const ctx = getAudioContext();
+                updateProgressUI(id, 15, 'Reading media bytes...');
+                const arrayBuffer = await item.file.arrayBuffer();
+
+                updateProgressUI(id, 35, 'Extracting audio channels...');
+                const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+                item.audioBuffer = audioBuffer;
+
+                updateProgressUI(id, 50, 'Encoding MP3 stream...');
+                
+                const mp3Blob = await convertBufferToMp3(audioBuffer, {
+                    bitrate: parseInt(appSettings.bitrate, 10),
+                    sampleRate: parseInt(appSettings.sampleRate, 10),
+                    channels: appSettings.channels,
+                    volume: appSettings.volume
+                }, (percent) => {
+                    updateProgressUI(id, 50 + Math.floor(percent * 0.45), `Encoding MP3 (${percent}%)...`);
+                });
+
+                item.mp3Blob = mp3Blob;
+                item.status = 'done';
+                item.progress = 100;
+                updateProgressUI(id, 100, 'Conversion Complete!');
+                
+                logToHistory(item);
+                showToast(`Converted ${item.title}.mp3 successfully!`, 'success');
+                renderFileList();
+
+                if (appSettings.autoDownload) {
+                    downloadSingleMp3(item.id);
+                }
+
+            } catch (err) {
+                console.error("Conversion error:", err);
+                item.status = 'error';
+                item.progress = 0;
+                updateProgressUI(id, 0, 'Failed to extract audio');
+                showToast(`Error converting file`, 'error');
+                renderFileList();
+            }
+        }
+
+        function convertBufferToMp3(audioBuffer, options, onProgress) {
+            return new Promise((resolve, reject) => {
+                try {
+                    const numChannels = audioBuffer.numberOfChannels;
+                    const nativeSampleRate = audioBuffer.sampleRate;
+
+                    const startSample = 0;
+                    const endSample = audioBuffer.length;
+                    const totalSamples = endSample;
+
+                    const leftChannel = audioBuffer.getChannelData(0);
+                    const rightChannel = numChannels > 1 ? audioBuffer.getChannelData(1) : leftChannel;
+
+                    const outChannels = options.channels === 'mono' ? 1 : Math.min(2, numChannels);
+
+                    if (typeof lamejs === 'undefined') {
+                        const wavBlob = audioBufferToWavBlob(audioBuffer, startSample, endSample);
+                        resolve(wavBlob);
+                        return;
+                    }
+
+                    const mp3encoder = new lamejs.Mp3Encoder(outChannels, nativeSampleRate, options.bitrate);
+                    const mp3Data = [];
+                    const gain = (options.volume || 100) / 100;
+
+                    let sampleIdx = startSample;
+                    const chunkSize = 11520;
+
+                    function processChunk() {
+                        const end = Math.min(sampleIdx + chunkSize, endSample);
+                        const count = end - sampleIdx;
+
+                        if (count <= 0) {
+                            const mp3bufEnd = mp3encoder.flush();
+                            if (mp3bufEnd.length > 0) mp3Data.push(mp3bufEnd);
+                            const blob = new Blob(mp3Data, { type: 'audio/mp3' });
+                            resolve(blob);
+                            return;
+                        }
+
+                        const leftChunk = new Int16Array(count);
+                        const rightChunk = outChannels === 2 ? new Int16Array(count) : null;
+
+                        for (let i = sampleIdx, j = 0; i < end; i++, j++) {
+                            let sL = leftChannel[i] * gain;
+                            sL = Math.max(-1, Math.min(1, sL));
+                            leftChunk[j] = sL < 0 ? sL * 0x8000 : sL * 0x7FFF;
+
+                            if (outChannels === 2) {
+                                let sR = rightChannel[i] * gain;
+                                sR = Math.max(-1, Math.min(1, sR));
+                                rightChunk[j] = sR < 0 ? sR * 0x8000 : sR * 0x7FFF;
+                            }
+                        }
+
+                        let mp3buf = outChannels === 2 ? mp3encoder.encodeBuffer(leftChunk, rightChunk) : mp3encoder.encodeBuffer(leftChunk);
+                        if (mp3buf.length > 0) mp3Data.push(mp3buf);
+
+                        sampleIdx = end;
+                        const pct = Math.min(100, Math.round((sampleIdx / totalSamples) * 100));
+                        if (onProgress) onProgress(pct);
+
+                        setTimeout(processChunk, 0);
+                    }
+
+                    processChunk();
+                } catch (err) {
+                    reject(err);
+                }
+            });
+        }
+
+        document.getElementById('saveSettingsBtn').addEventListener('click', () => {
+            saveCurrentSettings();
+            showToast('Settings saved successfully!', 'success');
+        });
+
+        document.getElementById('resetSettingsBtn').addEventListener('click', () => {
+            localStorage.removeItem('roko_mp3_settings');
+            appSettings.bitrate = '192';
+            appSettings.sampleRate = '44100';
+            appSettings.channels = 'stereo';
+            appSettings.volume = 100;
+            appSettings.autoDownload = false;
+            appSettings.autoStart = false;
+            loadSettings();
+            showToast('Settings reset to defaults', 'info');
+        });
+
+        function logToHistory(item) {
+            const entry = {
+                id: item.id,
+                name: item.name,
+                title: item.title,
+                duration: item.duration,
+                bitrate: appSettings.bitrate,
+                mp3Size: item.mp3Blob ? item.mp3Blob.size : 0,
+                timestamp: new Date().toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })
+            };
+            conversionHistory.unshift(entry);
+            
+            const badgeDesktop = document.getElementById('historyBadge');
+            if (badgeDesktop) badgeDesktop.textContent = conversionHistory.length;
+        }
+
+        function renderHistoryTable() {
+            const tbody = document.getElementById('historyTableBody');
+            const mobileList = document.getElementById('historyMobileList');
+            const emptyState = document.getElementById('historyEmpty');
+            const query = document.getElementById('historySearch').value.toLowerCase();
+
+            const filtered = conversionHistory.filter(h => h.name.toLowerCase().includes(query) || h.title.toLowerCase().includes(query));
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = '';
+                mobileList.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+            
+            // Render desktop table
+            tbody.innerHTML = filtered.map(item => `
+                <tr class="hover:bg-slate-800/40 transition-colors">
+                    <td class="py-3 px-4 font-semibold text-slate-200">
+                        <i class="fa-solid fa-file-audio text-brand-500 mr-2"></i>${escapeHtml(item.title || item.name)}
+                    </td>
+                    <td class="py-3 px-4">${formatTime(item.duration)}</td>
+                    <td class="py-3 px-4"><span class="bg-slate-800 text-brand-400 px-2 py-0.5 rounded font-mono">${item.bitrate} kbps</span></td>
+                    <td class="py-3 px-4">${(item.mp3Size / (1024 * 1024)).toFixed(2)} MB</td>
+                    <td class="py-3 px-4 text-slate-400 text-[11px]">${item.timestamp}</td>
+                    <td class="py-3 px-4 text-right">
+                        <button onclick="downloadFromHistory('${item.id}')" class="px-2.5 py-1 bg-brand-600 active:scale-95 hover:bg-brand-500 text-white rounded-lg text-[11px] font-bold">
+                            <i class="fa-solid fa-download"></i> Save
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+
+            // Render mobile cards list
+            mobileList.innerHTML = filtered.map(item => `
+                <div class="p-3.5 space-y-2">
+                    <div class="flex items-start justify-between gap-2">
+                        <div class="min-w-0">
+                            <h4 class="font-bold text-slate-200 text-xs truncate"><i class="fa-solid fa-file-audio text-brand-500 mr-1.5"></i>${escapeHtml(item.title || item.name)}</h4>
+                            <div class="flex items-center gap-2 text-[10px] text-slate-400 mt-1">
+                                <span class="bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800 font-mono text-brand-400">${item.bitrate} kbps</span>
+                                <span>${formatTime(item.duration)}</span>
+                                <span>${(item.mp3Size / (1024 * 1024)).toFixed(2)} MB</span>
+                            </div>
+                        </div>
+                        <button onclick="downloadFromHistory('${item.id}')" class="px-3 py-1.5 bg-brand-600 active:scale-95 hover:bg-brand-500 text-white rounded-lg text-xs font-bold flex-shrink-0">
+                            <i class="fa-solid fa-download"></i> Save
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        document.getElementById('historySearch').addEventListener('input', renderHistoryTable);
+
+        document.getElementById('clearHistoryBtn').addEventListener('click', () => {
+            conversionHistory.length = 0;
+            document.getElementById('historyBadge').textContent = '0';
+            renderHistoryTable();
+            showToast('History log cleared', 'info');
+        });
+
+        function downloadFromHistory(id) {
+            const item = fileState.find(f => f.id === id);
+            if (item && item.mp3Blob) {
+                downloadSingleMp3(id);
+            } else {
+                showToast('Audio file no longer cached in memory', 'warning');
+            }
+        }
+
+        function previewConvertedAudio(id) {
+            const item = fileState.find(f => f.id === id);
+            if (!item || !item.mp3Blob) return;
+
+            const url = URL.createObjectURL(item.mp3Blob);
+            audioElement.src = url;
+            playerDock.classList.remove('hidden');
+            playerTitle.textContent = item.title || item.name;
+            playerFileName.textContent = `${item.name} (${(item.mp3Blob.size / 1024).toFixed(0)} KB)`;
+
+            audioElement.play();
+            playerPlayBtn.innerHTML = '<i class="fa-solid fa-pause text-xs sm:text-sm"></i>';
+
+            setupVisualizer();
+            playerDock.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
+
+        playerPlayBtn.addEventListener('click', () => {
+            if (audioElement.paused) {
+                audioElement.play();
+                playerPlayBtn.innerHTML = '<i class="fa-solid fa-pause text-xs sm:text-sm"></i>';
+            } else {
+                audioElement.pause();
+                playerPlayBtn.innerHTML = '<i class="fa-solid fa-play text-xs sm:text-sm"></i>';
+            }
+        });
+
+        playerStopBtn.addEventListener('click', () => {
+            audioElement.pause();
+            audioElement.currentTime = 0;
+            playerPlayBtn.innerHTML = '<i class="fa-solid fa-play text-xs sm:text-sm"></i>';
+        });
+
+        audioElement.addEventListener('timeupdate', () => {
+            if (audioElement.duration) {
+                playerSeek.value = (audioElement.currentTime / audioElement.duration) * 100;
+                playerTimer.textContent = `${formatTime(audioElement.currentTime)} / ${formatTime(audioElement.duration)}`;
+            }
+        });
+
+        playerSeek.addEventListener('input', (e) => {
+            if (audioElement.duration) {
+                audioElement.currentTime = (e.target.value / 100) * audioElement.duration;
+            }
+        });
+
+        playerVolume.addEventListener('input', (e) => {
+            audioElement.volume = e.target.value;
+        });
+
+        function setupVisualizer() {
+            if (visualizerAnalyser) return;
+
+            try {
+                const ctx = getAudioContext();
+                const source = ctx.createMediaElementSource(audioElement);
+                visualizerAnalyser = ctx.createAnalyser();
+                visualizerAnalyser.fftSize = 64;
+
+                source.connect(visualizerAnalyser);
+                visualizerAnalyser.connect(ctx.destination);
+
+                drawVisualizer();
+            } catch (err) {}
+        }
+
+        function drawVisualizer() {
+            const canvas = visualizerCanvas;
+            const canvasCtx = canvas.getContext('2d');
+            canvas.width = canvas.clientWidth;
+            canvas.height = canvas.clientHeight;
+
+            if (!visualizerAnalyser) return;
+
+            const bufferLength = visualizerAnalyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+
+            function renderFrame() {
+                requestAnimationFrame(renderFrame);
+                visualizerAnalyser.getByteFrequencyData(dataArray);
+
+                canvasCtx.fillStyle = 'rgb(2, 6, 23)';
+                canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+                const barWidth = (canvas.width / bufferLength) * 1.8;
+                let x = 0;
+
+                for (let i = 0; i < bufferLength; i++) {
+                    const barHeight = (dataArray[i] / 255) * canvas.height;
+                    const gradient = canvasCtx.createLinearGradient(0, canvas.height, 0, 0);
+                    gradient.addColorStop(0, '#22c55e');
+                    gradient.addColorStop(1, '#6366f1');
+
+                    canvasCtx.fillStyle = gradient;
+                    canvasCtx.fillRect(x, canvas.height - barHeight, barWidth - 2, barHeight);
+                    x += barWidth;
+                }
+            }
+
+            renderFrame();
+        }
+
+        function downloadSingleMp3(id) {
+            const item = fileState.find(f => f.id === id);
+            if (!item || !item.mp3Blob) return;
+
+            const cleanName = item.title.trim() ? `${item.title.trim()}.mp3` : item.name.replace(/\.[^/.]+$/, "") + '.mp3';
+            const link = document.createElement('a');
+            const blobUrl = URL.createObjectURL(item.mp3Blob);
+            link.href = blobUrl;
+            link.download = cleanName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            setTimeout(() => {
+                URL.revokeObjectURL(blobUrl);
+            }, 10000);
+
+            showToast(`Downloading ${cleanName}`, 'success');
+        }
+
+        function checkZipButtonState() {
+            const doneFiles = fileState.filter(f => f.status === 'done' && f.mp3Blob);
+            if (doneFiles.length > 0) {
+                downloadZipBtn.disabled = false;
+                downloadZipBtn.className = "px-3 py-2 bg-slate-800 active:scale-95 hover:bg-slate-700 text-brand-400 border border-brand-500/30 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer shadow-md";
+            } else {
+                downloadZipBtn.disabled = true;
+                downloadZipBtn.className = "px-3 py-2 bg-slate-800 text-slate-500 border border-slate-700 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-not-allowed";
+            }
+        }
+
+        downloadZipBtn.addEventListener('click', async () => {
+            const doneFiles = fileState.filter(f => f.status === 'done' && f.mp3Blob);
+            if (doneFiles.length === 0) return;
+
+            const zip = new JSZip();
+            doneFiles.forEach(f => {
+                const cleanName = f.title.trim() ? `${f.title.trim()}.mp3` : f.name.replace(/\.[^/.]+$/, "") + '.mp3';
+                zip.file(cleanName, f.mp3Blob);
+            });
+
+            try {
+                showToast('Generating ZIP file...', 'info');
+                const content = await zip.generateAsync({ type: 'blob' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(content);
+                link.download = 'roko_mp3_converted_files.zip';
+                link.click();
+                URL.revokeObjectURL(link.href);
+                showToast('ZIP download started!', 'success');
+            } catch (err) {
+                console.error('ZIP generation error:', err);
+                showToast('Failed to create ZIP', 'error');
+            }
+        });
+
+        function audioBufferToWavBlob(audioBuffer, startSample, endSample) {
+            const numChannels = audioBuffer.numberOfChannels;
+            const sampleRate = audioBuffer.sampleRate;
+            const length = (endSample - startSample) * numChannels * 2;
+            const buffer = new ArrayBuffer(44 + length);
+            const view = new DataView(buffer);
+
+            const writeString = (v, offset, str) => {
+                for (let i = 0; i < str.length; i++) {
+                    v.setUint8(offset + i, str.charCodeAt(i));
+                }
+            };
+
+            writeString(view, 0, 'RIFF');
+            view.setUint32(4, 36 + length, true);
+            writeString(view, 8, 'WAVE');
+            writeString(view, 12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true);
+            view.setUint16(22, numChannels, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * numChannels * 2, true);
+            view.setUint16(32, numChannels * 2, true);
+            view.setUint16(34, 16, true);
+            writeString(view, 36, 'data');
+            view.setUint32(40, length, true);
+
+            let offset = 44;
+            for (let i = startSample; i < endSample; i++) {
+                for (let channel = 0; channel < numChannels; channel++) {
+                    let sample = audioBuffer.getChannelData(channel)[i];
+                    sample = Math.max(-1, Math.min(1, sample));
+                    view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+                    offset += 2;
+                }
+            }
+
+            return new Blob([buffer], { type: 'audio/wav' });
+        }
+
+        convertAllBtn.addEventListener('click', async () => {
+            const pending = fileState.filter(f => f.status !== 'done' && f.status !== 'processing');
+            if (pending.length === 0) {
+                showToast('No pending files to convert', 'info');
+                return;
+            }
+
+            for (const item of pending) {
+                await startSingleConversion(item.id);
+            }
+        });
+
+        clearAllBtn.addEventListener('click', () => {
+            fileState.length = 0;
+            renderFileList();
+            showToast('Queue cleared', 'info');
+        });
+
+        function updateProgressUI(id, percent, text) {
+            const item = fileState.find(f => f.id === id);
+            if (item) item.progress = percent;
+            
+            const bar = document.getElementById(`${id}_progressBar`);
+            const pText = document.getElementById(`${id}_progressPercent`);
+            const sText = document.getElementById(`${id}_progressStage`);
+            
+            if (bar) bar.style.width = `${percent}%`;
+            if (pText) pText.textContent = `${percent}%`;
+            if (sText) sText.textContent = text;
+        }
+
+        function updateFileCardUI(id) {
+            const item = fileState.find(f => f.id === id);
+            if (!item) return;
+            const statusText = document.getElementById(`${id}_statusText`);
+            if (statusText) {
+                statusText.className = `font-semibold ${getStatusColor(item.status)}`;
+                statusText.textContent = item.status.toUpperCase();
+            }
+        }
+
+        function getStatusColor(status) {
+            switch(status) {
+                case 'done': return 'text-emerald-400';
+                case 'processing': return 'text-amber-400';
+                case 'error': return 'text-red-400';
+                default: return 'text-slate-400';
+            }
+        }
+
+        function removeFile(id) {
+            const idx = fileState.findIndex(f => f.id === id);
+            if (idx !== -1) {
+                fileState.splice(idx, 1);
+                renderFileList();
+            }
+        }
+
+        function updateTag(id, field, val) {
+            const item = fileState.find(f => f.id === id);
+            if (item) item[field] = val;
+        }
+
+        function toggleOptionsModal(id) {
+            const panel = document.getElementById(`${id}_optionsPanel`);
+            if (panel) panel.classList.toggle('hidden');
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+
+        function formatTime(secs) {
+            if (!secs || isNaN(secs)) return '00:00';
+            const m = Math.floor(secs / 60);
+            const s = Math.floor(secs % 60);
+            return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `pointer-events-auto flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-xl text-xs font-semibold border transition-all duration-300 transform translate-y-2 opacity-0 bg-slate-900 border-slate-700 text-slate-100 max-w-full`;
+
+            let icon = '<i class="fa-solid fa-circle-info text-brand-400 text-base"></i>';
+            if (type === 'success') icon = '<i class="fa-solid fa-circle-check text-emerald-400 text-base"></i>';
+            if (type === 'warning') icon = '<i class="fa-solid fa-triangle-exclamation text-amber-400 text-base"></i>';
+            if (type === 'error') icon = '<i class="fa-solid fa-circle-xmark text-red-400 text-base"></i>';
+
+            toast.innerHTML = `${icon} <span class="truncate">${escapeHtml(message)}</span>`;
+            container.appendChild(toast);
+
+            setTimeout(() => toast.classList.remove('translate-y-2', 'opacity-0'), 10);
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        }
+
+        // Initialize Settings on load
+        window.addEventListener('DOMContentLoaded', () => {
+            loadSettings();
+        });
+    </script>
+</body>
+</html>
